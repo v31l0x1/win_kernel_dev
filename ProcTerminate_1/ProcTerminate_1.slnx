@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="ProcTermClient/ProcTermClient.vcxproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="ProcTerminate_1/ProcTerminate_1.vcxproj">
+    <Deploy />
+  </Project>
+</Solution>
