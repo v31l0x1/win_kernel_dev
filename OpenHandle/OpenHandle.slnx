@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="OpenHandle/OpenHandle.vcxproj">
+    <Deploy />
+  </Project>
+  <Project Path="OpenHandleClient/OpenHandleClient.vcxproj">
+    <Platform Project="x64" />
+  </Project>
+</Solution>
