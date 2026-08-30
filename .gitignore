@@ -23,7 +23,6 @@
 *.dll
 *.so.*
 
-
 # Fortran module files
 *.mod
 *.smod
@@ -43,6 +42,9 @@
 build/
 Build/
 build-*/
+x64/                    # Added - ignore x64 build folder
+debug/                  # Added - ignore debug folder
+release/                # Added - ignore release folder
 
 # CMake generated files
 CMakeFiles/
@@ -67,3 +69,9 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Visual Studio specific
+.vs/ 
+Debug/
+Release/
+x64/
