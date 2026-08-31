@@ -17,8 +17,8 @@ typedef struct _DUMP_PROCESS_INPUT
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 {
-	UNICODE_STRING DriverName = RTL_CONSTANT_STRING(L"\\Driver\\ProcDump");
-	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\DosDevices\\ProcDump");
+	UNICODE_STRING DriverName = RTL_CONSTANT_STRING(L"\\Driver\\ProcDumper");
+	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\ProcDumper");
 	NTSTATUS ntStatus;
 	PDEVICE_OBJECT DeviceObject = NULL;
 
@@ -38,6 +38,11 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 		return ntStatus;
 	}
 
+	DriverObject->MajorFunction[IRP_MJ_CREATE] = DriverCreateClose;
+	DriverObject->MajorFunction[IRP_MJ_CLOSE] = DriverCreateClose;
+	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DeviceIoControl;
+	DriverObject->DriverUnload = DriverUnload;
+
 	ntStatus = IoCreateSymbolicLink(&SymbolicLinkName, &DriverName);
 
 	if (!NT_SUCCESS(ntStatus))
@@ -46,11 +51,6 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 		IoDeleteDevice(DeviceObject);
 		return ntStatus;
 	}
-
-	DriverObject->MajorFunction[IRP_MJ_CREATE] = DriverCreateClose;
-	DriverObject->MajorFunction[IRP_MJ_CLOSE] = DriverCreateClose;
-	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DeviceIoControl;
-	DriverObject->DriverUnload = DriverUnload;
 
 	DbgPrint("[+] Driver loaded successfully.\n");
 
@@ -69,7 +69,7 @@ NTSTATUS DriverCreateClose(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 {
 	PDEVICE_OBJECT DeviceObject = DriverObject->DeviceObject;
-	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\DosDevices\\ProcDump");
+	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\ProcDumper");
 	IoDeleteSymbolicLink(&SymbolicLinkName);
 
 	if (DeviceObject != NULL)

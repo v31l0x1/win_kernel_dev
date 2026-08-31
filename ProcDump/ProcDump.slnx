@@ -6,4 +6,7 @@
   <Project Path="ProcDump/ProcDump.vcxproj">
     <Deploy />
   </Project>
+  <Project Path="ProcDumpClient/ProcDumpClient.vcxproj">
+    <Platform Project="x64" />
+  </Project>
 </Solution>
