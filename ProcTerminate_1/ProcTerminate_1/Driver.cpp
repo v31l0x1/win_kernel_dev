@@ -1,4 +1,5 @@
-#include <ntddk.h>
+//#include <ntddk.h>
+#include <ntifs.h>
 #include <ntstatus.h>
 
 #define IOCTL_TERMINATE_PROC CTL_CODE( 0x8001, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS )
@@ -6,12 +7,17 @@
 
 typedef unsigned long DWORD;
 
+//NTSTATUS NTAPI PsTerminateProcess(IN PEPROCESS Process, IN NTSTATUS ExitStatus);
+typedef NTSTATUS(NTAPI* PS_TERMINATE_PROCESS)(PEPROCESS Process, NTSTATUS ExitStatus);
+PS_TERMINATE_PROCESS g_pPsTerminateProcess = NULL;
+
 typedef struct {
 	DWORD Pid;
 } ProcTerm;
 
 NTSTATUS DeviceCreateClose(PDEVICE_OBJECT DeviceObject, PIRP Irp);
 NTSTATUS DeviceIoControl(PDEVICE_OBJECT DeviceObject, PIRP Irp);
+NTSTATUS GetPsTerminateProcessAddress();
 VOID UnloadDriver(PDRIVER_OBJECT DriverObject);
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
@@ -40,6 +46,12 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 	DriverObject->MajorFunction[IRP_MJ_CLOSE] = DeviceCreateClose;
 	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DeviceIoControl;
 	DriverObject->DriverUnload = UnloadDriver;
+
+	NTSTATUS status = GetPsTerminateProcessAddress();
+	if (!NT_SUCCESS(status)) {
+		DbgPrint("[-] Failed to resolve PsTerminateProcess");
+		return status;
+	}
 
 	ntStatus = IoCreateSymbolicLink(&SymbolicLinkName, &DeviceName);
 
@@ -75,6 +87,20 @@ VOID UnloadDriver(PDRIVER_OBJECT DriverObject)
 	DbgPrint("[+] Driver unloaded successfully");
 }
 
+NTSTATUS GetPsTerminateProcessAddress()
+{
+	UNICODE_STRING routineName = RTL_CONSTANT_STRING(L"PsTerminateProcess");
+	g_pPsTerminateProcess = (PS_TERMINATE_PROCESS)MmGetSystemRoutineAddress(&routineName);
+
+	if (g_pPsTerminateProcess == NULL) {
+		DbgPrint("[-] Failed to find PsTerminateProcess address");
+		return STATUS_NOT_FOUND;
+	}
+
+	DbgPrint("[+] PsTerminateProcess found at 0x%p", g_pPsTerminateProcess);
+	return STATUS_SUCCESS;
+}
+
 
 NTSTATUS DeviceIoControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -86,22 +112,39 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 		ProcTerm* procTerm = (ProcTerm*)Irp->AssociatedIrp.SystemBuffer;
 
 		if (procTerm != NULL) {
-			HANDLE procHandle;
+			//HANDLE procHandle;
 			OBJECT_ATTRIBUTES objAttr;
 			CLIENT_ID clientId;
 			clientId.UniqueProcess = UlongToHandle(procTerm->Pid);
 			clientId.UniqueThread = NULL;
 			InitializeObjectAttributes(&objAttr, NULL, 0, NULL, NULL);
 
-			ntStatus = ZwOpenProcess(&procHandle, PROCESS_TERMINATE, &objAttr, &clientId);
+			//ntStatus = ZwOpenProcess(&procHandle, PROCESS_TERMINATE, &objAttr, &clientId);
+
+			//if (NT_SUCCESS(ntStatus)) {
+			//	ntStatus = ZwTerminateProcess(procHandle, 0);
+			//	ZwClose(procHandle);
+			//}
+			//else {
+			//	DbgPrint("[-] Failed to open process with PID: %lu", procTerm->Pid);
+			//}
+
+			PEPROCESS pProcess = NULL;
+
+			ntStatus = PsLookupProcessByProcessId(clientId.UniqueProcess, &pProcess);
 
 			if (NT_SUCCESS(ntStatus)) {
-				ntStatus = ZwTerminateProcess(procHandle, 0);
-				ZwClose(procHandle);
+				if (g_pPsTerminateProcess != NULL) {
+					ntStatus = g_pPsTerminateProcess(pProcess, STATUS_SUCCESS);
+				}
+				else {
+					ntStatus = STATUS_UNSUCCESSFUL;
+					DbgPrint("[-] PsTerminateProcess not available");
+				}
+				ObDereferenceObject(pProcess);
 			}
-			else {
-				DbgPrint("[-] Failed to open process with PID: %lu", procTerm->Pid);
-			}
+
+				
 			ntStatus = STATUS_SUCCESS;
 		}
 		else {
