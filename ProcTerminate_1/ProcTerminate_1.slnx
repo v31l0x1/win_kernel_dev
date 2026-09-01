@@ -3,7 +3,7 @@
     <Platform Name="ARM64" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="ProcTermClient/ProcTermClient.vcxproj">
+  <Project Path="ProcTermClient/ProcTermClient.vcxproj" Id="c089baa0-ba1e-438e-8c0f-dd3c3538df2f">
     <Platform Project="x64" />
   </Project>
   <Project Path="ProcTerminate_1/ProcTerminate_1.vcxproj">

