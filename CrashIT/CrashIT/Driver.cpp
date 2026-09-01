@@ -2,6 +2,8 @@
 #include <ntifs.h>
 #include <ntstatus.h>
 
+#define IOCTL_CRASHIT CTL_CODE(0x8000, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 extern "C" NTSTATUS ZwQueryInformationProcess(
 	HANDLE ProcessHandle,
 	PROCESSINFOCLASS ProcessInformationClass,
