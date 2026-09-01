@@ -1,15 +1,10 @@
-//#include <ntddk.h>
-#include <ntifs.h>
+#include <ntddk.h>
 #include <ntstatus.h>
 
 #define IOCTL_TERMINATE_PROC CTL_CODE( 0x8001, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS )
 #define PROCESS_TERMINATE 0x0001
 
 typedef unsigned long DWORD;
-
-//NTSTATUS NTAPI PsTerminateProcess(IN PEPROCESS Process, IN NTSTATUS ExitStatus);
-typedef NTSTATUS(NTAPI* PS_TERMINATE_PROCESS)(PEPROCESS Process, NTSTATUS ExitStatus);
-PS_TERMINATE_PROCESS g_pPsTerminateProcess = NULL;
 
 typedef struct {
 	DWORD Pid;
@@ -87,20 +82,6 @@ VOID UnloadDriver(PDRIVER_OBJECT DriverObject)
 	DbgPrint("[+] Driver unloaded successfully");
 }
 
-NTSTATUS GetPsTerminateProcessAddress()
-{
-	UNICODE_STRING routineName = RTL_CONSTANT_STRING(L"PsTerminateProcess");
-	g_pPsTerminateProcess = (PS_TERMINATE_PROCESS)MmGetSystemRoutineAddress(&routineName);
-
-	if (g_pPsTerminateProcess == NULL) {
-		DbgPrint("[-] Failed to find PsTerminateProcess address");
-		return STATUS_NOT_FOUND;
-	}
-
-	DbgPrint("[+] PsTerminateProcess found at 0x%p", g_pPsTerminateProcess);
-	return STATUS_SUCCESS;
-}
-
 
 NTSTATUS DeviceIoControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -112,39 +93,23 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 		ProcTerm* procTerm = (ProcTerm*)Irp->AssociatedIrp.SystemBuffer;
 
 		if (procTerm != NULL) {
-			//HANDLE procHandle;
+			HANDLE procHandle;
 			OBJECT_ATTRIBUTES objAttr;
 			CLIENT_ID clientId;
 			clientId.UniqueProcess = UlongToHandle(procTerm->Pid);
 			clientId.UniqueThread = NULL;
 			InitializeObjectAttributes(&objAttr, NULL, 0, NULL, NULL);
 
-			//ntStatus = ZwOpenProcess(&procHandle, PROCESS_TERMINATE, &objAttr, &clientId);
-
-			//if (NT_SUCCESS(ntStatus)) {
-			//	ntStatus = ZwTerminateProcess(procHandle, 0);
-			//	ZwClose(procHandle);
-			//}
-			//else {
-			//	DbgPrint("[-] Failed to open process with PID: %lu", procTerm->Pid);
-			//}
-
-			PEPROCESS pProcess = NULL;
-
-			ntStatus = PsLookupProcessByProcessId(clientId.UniqueProcess, &pProcess);
+			ntStatus = ZwOpenProcess(&procHandle, PROCESS_TERMINATE, &objAttr, &clientId);
 
 			if (NT_SUCCESS(ntStatus)) {
-				if (g_pPsTerminateProcess != NULL) {
-					ntStatus = g_pPsTerminateProcess(pProcess, STATUS_SUCCESS);
-				}
-				else {
-					ntStatus = STATUS_UNSUCCESSFUL;
-					DbgPrint("[-] PsTerminateProcess not available");
-				}
-				ObDereferenceObject(pProcess);
+				ntStatus = ZwTerminateProcess(procHandle, 0);
+				ZwClose(procHandle);
 			}
+			else {
+				DbgPrint("[-] Failed to open process with PID: %lu", procTerm->Pid);
+			}	
 
-				
 			ntStatus = STATUS_SUCCESS;
 		}
 		else {
