@@ -1,4 +1,4 @@
-#include <ntddk.h>
+#include <ntifs.h>
 #include <ntstatus.h>
 
 #pragma warning(disable : 4996)
@@ -119,8 +119,7 @@ NTSTATUS ResolvePspTerminateProcess(VOID)
 
 	UCHAR pattern[] = {
 		0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x20,
-		0x65, 0x48, 0x8B, 0x3C, 0x25, 0x88, 0x01, 0x00, 0x00,
-		0x44, 0x8B, 0xC2, 0x41, 0xB9, 0x01, 0x00, 0x00, 0x00
+		0x65, 0x48, 0x8B, 0x3C, 0x25, 0x88, 0x01, 0x00, 0x00
 	};
 
 	PVOID address = FindPattern((PUCHAR)ntoskrnlBase, ntoskrnlSize, pattern, sizeof(pattern));
@@ -215,27 +214,14 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 
 		if (ProcTerm != NULL)
 		{
-			HANDLE hProcess = NULL;
-			CLIENT_ID clientId;
-			OBJECT_ATTRIBUTES objectAttributes;
-			clientId.UniqueProcess = UlongToHandle(ProcTerm->Pid);
-			clientId.UniqueThread = NULL;
-			InitializeObjectAttributes(&objectAttributes, NULL, 0, NULL, NULL);
+			PEPROCESS PeProcess = NULL;
 
-			status = ZwOpenProcess(&hProcess, PROCESS_ALL_ACCESS, &objectAttributes, &clientId);
-
+			status = PsLookupProcessByProcessId(UlongToHandle(ProcTerm->Pid), &PeProcess);
+			
 			if (NT_SUCCESS(status)) {
-				PEPROCESS processObject = NULL;
-				status = ObReferenceObjectByHandle(
-					hProcess, 0, NULL, KernelMode,
-					(PVOID*)&processObject, NULL
-				);
+				status = g_PspTerminateProcess(PeProcess, 0);
 
-				if (NT_SUCCESS(status)) {
-					status = g_PspTerminateProcess(processObject, 0);
-					ObDereferenceObject(processObject);
-				}
-				ZwClose(hProcess);
+				ObDereferenceObject(PeProcess);
 			}
 			else {
 				DbgPrint("[-] Failed to open process with PID: %lu\n", ProcTerm->Pid);
