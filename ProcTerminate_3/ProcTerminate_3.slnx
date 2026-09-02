@@ -3,10 +3,7 @@
     <Platform Name="ARM64" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="PsTermClient/PsTermClient.vcxproj">
-    <Platform Project="x64" />
-  </Project>
-  <Project Path="PsTerminate/PsTerminate.vcxproj">
+  <Project Path="ProcTerminate_3/ProcTerminate_3.vcxproj">
     <Deploy />
   </Project>
 </Solution>
