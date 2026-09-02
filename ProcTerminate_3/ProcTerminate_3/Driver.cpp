@@ -93,12 +93,12 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 
 			if (NT_SUCCESS(status))
 			{
-
+				// Need to resolve PsTerminateProcess or PspTerminateProcess dynamically.
 				status = PspTerminateProces(hProcess, 0);
 				ZwClose(hProcess);
 			}
 			else {
-				DbgPrint("[-] Failed to open process with PID: %lu", procTerm->Pid);
+				DbgPrint("[-] Failed to open process with PID: %lu", ProcTerm->Pid);
 			}
 
 			status = STATUS_SUCCESS;
