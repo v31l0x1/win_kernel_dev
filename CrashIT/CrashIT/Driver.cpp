@@ -89,22 +89,22 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 	NTSTATUS status = STATUS_SUCCESS;
 
-	if (irpSp->Parameters.DeviceIoControl.IoControlCode == 0x222000 && irpSp->Parameters.DeviceIoControl.InputBufferLength < sizeof(ULONG))
+	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_CRASHIT && irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(ULONG))
 	{
 		PCRASHIT_INPUT crashInput = (PCRASHIT_INPUT)Irp->AssociatedIrp.SystemBuffer;
 
 		if (crashInput != NULL)
 		{
-			PEPROCESS Process;
-			HANDLE hProcess = UlongToHandle(crashInput->Pid);
+			PEPROCESS Process = NULL;
+			HANDLE hProcessId = UlongToHandle(crashInput->Pid);
 
-			status = PsLookupProcessByProcessId(hProcess, &Process);
+			status = PsLookupProcessByProcessId(hProcessId, &Process);
 			if (NT_SUCCESS(status))
 			{
 				HANDLE hProcessHandle;
 	
 				status = ObOpenObjectByPointer(
-					hProcess,
+					Process,
 					OBJ_KERNEL_HANDLE,
 					NULL,
 					PROCESS_ALL_ACCESS,
@@ -159,7 +159,11 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 
 					ZwClose(hProcessHandle);
 				}
+				else {
+					DbgPrint("[-] Failed to open process handle: %08x\n", status);
+				}
 
+				ObDereferenceObject(Process);
 			}
 			else {
 				status = STATUS_NOT_FOUND;

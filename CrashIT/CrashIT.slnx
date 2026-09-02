@@ -3,7 +3,7 @@
     <Platform Name="ARM64" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="Crash/Crash.vcxproj">
+  <Project Path="Crash/Crash.vcxproj" Id="b6707a21-7734-4856-8657-7fc54aefc549">
     <Platform Project="x64" />
   </Project>
   <Project Path="CrashIT/CrashIT.vcxproj">
