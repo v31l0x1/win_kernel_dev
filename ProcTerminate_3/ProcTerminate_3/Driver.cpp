@@ -1,138 +1,26 @@
 #include <ntifs.h>
 #include <ntstatus.h>
 
-#pragma warning(disable : 4996)
-
 #define IOCTL_TERM_3 CTL_CODE(0x8000, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#ifndef PROCESS_TERMINATE
+#define PROCESS_TERMINATE (0x0001)
+#endif
+
+typedef struct _PROC_TERM {
+	ULONG Pid;
+} PROC_TERM, * PPROC_TERM;
 
 NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp);
 NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp);
 VOID DriverUnload(PDRIVER_OBJECT DriverObject);
 
-typedef NTSTATUS(NTAPI* ZwQuerySystemInformation_t)(ULONG, PVOID, ULONG, PULONG);
-typedef NTSTATUS(*PSP_TERMINATE_PROCESS)(PEPROCESS Process, NTSTATUS ExitStatus);
 
-typedef struct _RTL_PROCESS_MODULE_INFORMATION {
-	HANDLE Section;
-	PVOID MappedBase;
-	PVOID ImageBase;
-	ULONG ImageSize;
-	ULONG Flags;
-	USHORT LoadOrderIndex;
-	USHORT InitOrderIndex;
-	USHORT LoadCount;
-	USHORT OffsetToFileName;
-	UCHAR FullPathName[256];
-} RTL_PROCESS_MODULE_INFORMATION, * PRTL_PROCESS_MODULE_INFORMATION;
+typedef PVOID(*PsGetProcessSectionBaseAddress)(PEPROCESS Process);
+typedef NTSTATUS(*MmUnmapViewOfSection)(PEPROCESS Process, PVOID BaseAddress);
 
-typedef struct _RTL_PROCESS_MODULES {
-	ULONG NumberOfModules;
-	RTL_PROCESS_MODULE_INFORMATION Modules[1];
-} RTL_PROCESS_MODULES, * PRTL_PROCESS_MODULES;
-
-PSP_TERMINATE_PROCESS g_PspTerminateProcess = NULL;
-
-typedef struct _PROC_TERM {
-	ULONG Pid;
-} PROC_TERM, *PPROC_TERM;
-
-PVOID FindPattern(PUCHAR baseAddress, SIZE_T size, PUCHAR pattern, SIZE_T patternSize)
-{
-	for (size_t i = 0; i <= size - patternSize; i++) 
-	{
-		BOOLEAN found = TRUE;
-		for (size_t j = 0; j < patternSize; j++) {
-			if (baseAddress[i + j] != pattern[j]) {
-				found = FALSE;
-				break;
-			}
-		}
-		if (found) {
-			return (PVOID)(baseAddress + i);
-		}
-	}
-	return NULL;
-}
-
-NTSTATUS GetNtosKrnlBaseAndSize(PVOID* BaseAddress, PSIZE_T Size)
-{
-	UNICODE_STRING routineName;
-	RtlInitUnicodeString(&routineName, L"ZwQuerySystemInformation");
-	ZwQuerySystemInformation_t pZwQuerySystemInformation =
-		(ZwQuerySystemInformation_t)MmGetSystemRoutineAddress(&routineName);
-
-	if (!pZwQuerySystemInformation) {
-		return STATUS_NOT_FOUND;
-	}
-
-	ULONG returnLength = 0;
-	/* https://ntdoc.m417z.com/system_information_class */
-	NTSTATUS status = pZwQuerySystemInformation(11, NULL, 0, &returnLength); // SystemModuleInformation
-	if (status != STATUS_INFO_LENGTH_MISMATCH) {
-		return status;
-	}
-
-	PVOID buffer = ExAllocatePoolWithTag(NonPagedPool, returnLength, 'tagK');
-	if (!buffer) {
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
-
-	status = pZwQuerySystemInformation(11, buffer, returnLength, &returnLength); // SystemModuleInformation
-	if (!NT_SUCCESS(status)) {
-		ExFreePoolWithTag(buffer, 'tagK');
-		return status;
-	}
-
-	PRTL_PROCESS_MODULES modules = (PRTL_PROCESS_MODULES)buffer;
-	for (ULONG i = 0; i < modules->NumberOfModules; i++) {
-		PCSTR fileName = (PCSTR)(modules->Modules[i].FullPathName + modules->Modules[i].OffsetToFileName);
-		if (_stricmp(fileName, "ntoskrnl.exe") == 0) {
-			*BaseAddress = modules->Modules[i].ImageBase;
-			*Size = modules->Modules[i].ImageSize;
-			ExFreePoolWithTag(buffer, 'tagK');
-			return STATUS_SUCCESS;
-		}
-	}
-
-	ExFreePoolWithTag(buffer, 'tagK');
-	return STATUS_NOT_FOUND;
-}
-
-NTSTATUS ResolvePspTerminateProcess(VOID)
-{
-	PVOID ntoskrnlBase = NULL;
-	SIZE_T ntoskrnlSize = 0;
-
-	NTSTATUS status = GetNtosKrnlBaseAndSize(&ntoskrnlBase, &ntoskrnlSize);
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("[-] Failed to get ntoskrnl base: %08X\n", status);
-		return status;
-	}
-
-	DbgPrint("[+] ntoskrnl.exe base: %p size: 0x%llx\n", ntoskrnlBase, (ULONGLONG)ntoskrnlSize);
-
-	//UCHAR pattern[] = {
-	//	0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x20,
-	//	0x65, 0x48, 0x8B, 0x3C, 0x25, 0x88, 0x01, 0x00, 0x00,
-	//	0x66, 0xFF, 0x8F, 0xE4, 0x01, 0x00, 0x00
-	//};
-
-	UCHAR pattern[] = {
-		0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x20,
-		0x65, 0x48, 0x8B, 0x3C, 0x25, 0x88, 0x01, 0x00, 0x00
-	};
-
-	PVOID address = FindPattern((PUCHAR)ntoskrnlBase, ntoskrnlSize, pattern, sizeof(pattern));
-	if (!address) {
-		DbgPrint("[-] Pattern for PspTerminateProcess not found\n");
-		return STATUS_NOT_FOUND;
-	}
-
-	g_PspTerminateProcess = (PSP_TERMINATE_PROCESS)address;
-	DbgPrint("[+] PspTerminateProcess resolved at: %p\n", address);
-	return STATUS_SUCCESS;
-}
-
+PsGetProcessSectionBaseAddress g_PsGetProcessSectionBaseAddress = NULL;
+MmUnmapViewOfSection g_MmUnmapViewOfSection = NULL;
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 {
@@ -162,7 +50,6 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DeviceIoControl;
 	DriverObject->DriverUnload = DriverUnload;
 
-
 	status = IoCreateSymbolicLink(&SymbolicLinkName, &DeviceName);
 	if (!NT_SUCCESS(status))
 	{
@@ -171,12 +58,25 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 		return status;
 	}
 
-	status = ResolvePspTerminateProcess();
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("[-] Failed to resolve PspTerminateProcess: %08X\n", status);
+	UNICODE_STRING funcName;
+	RtlInitUnicodeString(&funcName, L"PsGetProcessSectionBaseAddress");
+	g_PsGetProcessSectionBaseAddress = (PsGetProcessSectionBaseAddress)MmGetSystemRoutineAddress(&funcName);
+
+	if (!g_PsGetProcessSectionBaseAddress) {
+		DbgPrint("[-] Failed to get PsGetProcessSectionBaseAddress\n");
 		IoDeleteSymbolicLink(&SymbolicLinkName);
 		IoDeleteDevice(DeviceObject);
-		return status;
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	RtlInitUnicodeString(&funcName, L"MmUnmapViewOfSection");
+	g_MmUnmapViewOfSection = (MmUnmapViewOfSection)MmGetSystemRoutineAddress(&funcName);
+
+	if (!g_MmUnmapViewOfSection) {
+		DbgPrint("[-] Failed to get MmUnmapViewOfSection\n");
+		IoDeleteSymbolicLink(&SymbolicLinkName);
+		IoDeleteDevice(DeviceObject);
+		return STATUS_UNSUCCESSFUL;
 	}
 
 	DbgPrint("[+] Driver loaded successfully\n");
@@ -189,7 +89,7 @@ NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp)
 	Irp->IoStatus.Information = 0;
 	IoCompleteRequest(Irp, IO_NO_INCREMENT);
 	return STATUS_SUCCESS;
-}	
+}
 
 VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 {
@@ -202,46 +102,63 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 	DbgPrint("[+] Driver unloaded successfully\n");
 }
 
-
-NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
+NTSTATUS KillProcessByPid(_In_ ULONG Pid)
 {
+	PEPROCESS Process;
+	NTSTATUS status;
+
+	if (Pid == 0 || Pid == 4) {
+		DbgPrint("[-] Refusing to terminate a critical system process (PID: %lu)\n", Pid);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	status = PsLookupProcessByProcessId((HANDLE)(ULONG_PTR)Pid, &Process);
+	if (!NT_SUCCESS(status)) {
+		DbgPrint("[-] Failed to lookup process by PID: %lu\n", Pid);
+		return status;
+	}
+
+	PVOID baseAddress = g_PsGetProcessSectionBaseAddress(Process);
+
+	status = g_MmUnmapViewOfSection(Process, baseAddress);
+
+	if (!NT_SUCCESS(status)) {
+		DbgPrint("[-] Failed to unmap view of section for PID: %lu, status: 0x%08X\n", Pid, status);
+		ObDereferenceObject(Process);
+		return status;
+	}
+
+	DbgPrint("[+] Successfully unmapped view of section for PID: %lu\n", Pid);
+
+	ObDereferenceObject(Process);
+
+	return status;
+}
+
+NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp) {
 	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 	NTSTATUS status = STATUS_SUCCESS;
-	
-	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_TERM_3 && irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(ULONG)) {
-		
-		PPROC_TERM ProcTerm = (PPROC_TERM)Irp->AssociatedIrp.SystemBuffer;
 
-		if (ProcTerm != NULL)
-		{
-			PEPROCESS PeProcess = NULL;
-
-			status = PsLookupProcessByProcessId(UlongToHandle(ProcTerm->Pid), &PeProcess);
-			
-			if (NT_SUCCESS(status)) {
-				status = g_PspTerminateProcess(PeProcess, 0);
-
-				ObDereferenceObject(PeProcess);
-			}
-			else {
-				DbgPrint("[-] Failed to open process with PID: %lu\n", ProcTerm->Pid);
-			}
-
-			status = STATUS_SUCCESS;
+	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_TERM_3) {
+		if (irpSp->Parameters.DeviceIoControl.InputBufferLength < sizeof(PROC_TERM)) {
+			status = STATUS_INVALID_PARAMETER;
 		}
 		else {
-			DbgPrint("[-] Invalid input buffer");
-			status = STATUS_INVALID_PARAMETER;
+			PPROC_TERM ProcTerm = (PPROC_TERM)Irp->AssociatedIrp.SystemBuffer;
+			if (ProcTerm) {
+				status = KillProcessByPid(ProcTerm->Pid);
+			}
+			else {
+				status = STATUS_INVALID_PARAMETER;
+			}
 		}
 	}
 	else {
-		DbgPrint("[-] Invalid IOCTL code");
 		status = STATUS_INVALID_DEVICE_REQUEST;
 	}
 
 	Irp->IoStatus.Status = status;
 	Irp->IoStatus.Information = 0;
 	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-
 	return status;
 }
