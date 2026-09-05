@@ -1,43 +1,143 @@
-#include <ntddk.h>
-#include <ntstatus.h>
-#include <minwindef.h>
-#include <aux_klib.h>
+#pragma once
+#include <windows.h>
+#include <stdio.h>
 
-/* 
-    https://www.bordergate.co.uk/neutralising-kernel-callbacks/ 
-*/
+#define NT_SUCCESS(Status)  (((NTSTATUS)(Status)) >= 0)
+#define STATUS_INFO_LENGTH_MISMATCH      ((NTSTATUS)0xC0000004L)
 
-#define DRIVER_NAME "Rm_ProcCallback"
-#define IOCTL_RM_PROC_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+typedef _Return_type_success_(return >= 0) long NTSTATUS;
 
-typedef struct _PROC_CALLBACK_DATA {
-	ULONG ProcessId;
-} PROC_CALLBACK_DATA, * PPROC_CALLBACK_DATA;
+typedef LONG KPRIORITY, * PKPRIORITY;
 
-struct ModulesData {
-	CHAR ModuleName[256];
-	ULONG64 ModuleBase;
-};
-
-typedef struct _RTL_PROCESS_MODULES
+typedef struct _UNICODE_STRING
 {
-    ULONG NumberOfModules;
-    _Field_size_(NumberOfModules) RTL_PROCESS_MODULE_INFORMATION Modules[1];
-} RTL_PROCESS_MODULES, * PRTL_PROCESS_MODULES;
+    USHORT Length;
+    USHORT MaximumLength;
+    _Field_size_bytes_part_opt_(MaximumLength, Length) PWCH Buffer;
+} UNICODE_STRING, * PUNICODE_STRING;
 
-typedef struct _RTL_PROCESS_MODULE_INFORMATION
+typedef struct _CLIENT_ID
 {
-    PVOID Section;
-    PVOID MappedBase;
-    PVOID ImageBase;
-    ULONG ImageSize;
-    ULONG Flags;
-    USHORT LoadOrderIndex;
-    USHORT InitOrderIndex;
-    USHORT LoadCount;
-    USHORT OffsetToFileName;
-    UCHAR FullPathName[256];
-} RTL_PROCESS_MODULE_INFORMATION, * PRTL_PROCESS_MODULE_INFORMATION;
+    HANDLE UniqueProcess;
+    HANDLE UniqueThread;
+} CLIENT_ID, * PCLIENT_ID;
+
+typedef enum _KTHREAD_STATE
+{
+    Initialized,
+    Ready,
+    Running,
+    Standby,
+    Terminated,
+    Waiting,
+    Transition,
+    DeferredReady,
+    GateWaitObsolete,
+    WaitingForProcessInSwap,
+    MaximumThreadState
+} KTHREAD_STATE, * PKTHREAD_STATE;
+
+typedef enum _KWAIT_REASON
+{
+    Executive,               // Waiting for an executive event.
+    FreePage,                // Waiting for a free page.
+    PageIn,                  // Waiting for a page to be read in.
+    PoolAllocation,          // Waiting for a pool allocation.
+    DelayExecution,          // Waiting due to a delay execution.           // NtDelayExecution
+    Suspended,               // Waiting because the thread is suspended.    // NtSuspendThread
+    UserRequest,             // Waiting due to a user request.              // NtWaitForSingleObject
+    WrExecutive,             // Waiting for an executive event.
+    WrFreePage,              // Waiting for a free page.
+    WrPageIn,                // Waiting for a page to be read in.
+    WrPoolAllocation,        // Waiting for a pool allocation.              // 10
+    WrDelayExecution,        // Waiting due to a delay execution.
+    WrSuspended,             // Waiting because the thread is suspended.
+    WrUserRequest,           // Waiting due to a user request.
+    WrEventPair,             // Waiting for an event pair.                  // NtCreateEventPair
+    WrQueue,                 // Waiting for a queue.                        // NtRemoveIoCompletion
+    WrLpcReceive,            // Waiting for an LPC receive.                 // NtReplyWaitReceivePort
+    WrLpcReply,              // Waiting for an LPC reply.                   // NtRequestWaitReplyPort
+    WrVirtualMemory,         // Waiting for virtual memory.
+    WrPageOut,               // Waiting for a page to be written out.       // NtFlushVirtualMemory
+    WrRendezvous,            // Waiting for a rendezvous.                   // 20
+    WrKeyedEvent,            // Waiting for a keyed event.                  // NtCreateKeyedEvent
+    WrTerminated,            // Waiting for thread termination.
+    WrProcessInSwap,         // Waiting for a process to be swapped in.
+    WrCpuRateControl,        // Waiting for CPU rate control.
+    WrCalloutStack,          // Waiting for a callout stack.
+    WrKernel,                // Waiting for a kernel event.
+    WrResource,              // Waiting for a resource.
+    WrPushLock,              // Waiting for a push lock.
+    WrMutex,                 // Waiting for a mutex.
+    WrQuantumEnd,            // Waiting for the end of a quantum.           // 30
+    WrDispatchInt,           // Waiting for a dispatch interrupt.
+    WrPreempted,             // Waiting because the thread was preempted.
+    WrYieldExecution,        // Waiting to yield execution.
+    WrFastMutex,             // Waiting for a fast mutex.
+    WrGuardedMutex,          // Waiting for a guarded mutex.
+    WrRundown,               // Waiting for a rundown.
+    WrAlertByThreadId,       // Waiting for an alert by thread ID.
+    WrDeferredPreempt,       // Waiting for a deferred preemption.
+    WrPhysicalFault,         // Waiting for a physical fault.
+    WrIoRing,                // Waiting for an I/O ring.                    // 40
+    WrMdlCache,              // Waiting for an MDL cache.
+    WrRcu,                   // Waiting for read-copy-update (RCU) synchronization.
+    MaximumWaitReason
+} KWAIT_REASON, * PKWAIT_REASON;
+
+typedef struct _SYSTEM_THREAD_INFORMATION
+{
+    LARGE_INTEGER KernelTime;                   // Number of 100-nanosecond intervals spent executing kernel code.
+    LARGE_INTEGER UserTime;                     // Number of 100-nanosecond intervals spent executing user code.
+    LARGE_INTEGER CreateTime;                   // The date and time when the thread was created.
+    ULONG WaitTime;                             // The current time spent in ready queue or waiting (depending on the thread state).
+    PVOID StartAddress;                         // The initial start address of the thread.
+    CLIENT_ID ClientId;                         // The identifier of the thread and the process owning the thread.
+    KPRIORITY Priority;                         // The dynamic priority of the thread.
+    KPRIORITY BasePriority;                     // The starting priority of the thread.
+    ULONG ContextSwitches;                      // The total number of context switches performed.
+    KTHREAD_STATE ThreadState;                  // The current state of the thread.
+    KWAIT_REASON WaitReason;                    // The current reason the thread is waiting.
+} SYSTEM_THREAD_INFORMATION, * PSYSTEM_THREAD_INFORMATION;
+
+typedef struct _SYSTEM_PROCESS_INFORMATION
+{
+    ULONG NextEntryOffset;                      // The address of the previous item plus the value in the NextEntryOffset member. For the last item in the array, NextEntryOffset is 0.
+    ULONG NumberOfThreads;                      // The NumberOfThreads member contains the number of threads in the process.
+    ULONGLONG WorkingSetPrivateSize;            // The total private memory that a process currently has allocated and is physically resident in memory. // since VISTA
+    ULONG HardFaultCount;                       // The total number of hard faults for data from disk rather than from in-memory pages. // since WIN7
+    ULONG NumberOfThreadsHighWatermark;         // The peak number of threads that were running at any given point in time, indicative of potential performance bottlenecks related to thread management.
+    ULONGLONG CycleTime;                        // The sum of the cycle time of all threads in the process.
+    LARGE_INTEGER CreateTime;                   // Number of 100-nanosecond intervals since the creation time of the process. Not updated during system timezone changes.
+    LARGE_INTEGER UserTime;                     // Number of 100-nanosecond intervals the process has executed in user mode.
+    LARGE_INTEGER KernelTime;                   // Number of 100-nanosecond intervals the process has executed in kernel mode.
+    UNICODE_STRING ImageName;                   // The file name of the executable image.
+    KPRIORITY BasePriority;                     // The starting priority of the process.
+    HANDLE UniqueProcessId;                     // The identifier of the process.
+    HANDLE InheritedFromUniqueProcessId;        // The identifier of the process that created this process. Not updated and incorrectly refers to processes with recycled identifiers.
+    ULONG HandleCount;                          // The current number of open handles used by the process.
+    ULONG SessionId;                            // The identifier of the Remote Desktop Services session under which the specified process is running.
+    ULONG_PTR UniqueProcessKey;                 // since VISTA (requires SystemExtendedProcessInformation)
+    SIZE_T PeakVirtualSize;                     // The peak size, in bytes, of the virtual memory used by the process.
+    SIZE_T VirtualSize;                         // The current size, in bytes, of virtual memory used by the process.
+    ULONG PageFaultCount;                       // The total number of page faults for data that is not currently in memory. The value wraps around to zero on average 24 hours.
+    SIZE_T PeakWorkingSetSize;                  // The peak size, in kilobytes, of the working set of the process.
+    SIZE_T WorkingSetSize;                      // The number of pages visible to the process in physical memory. These pages are resident and available for use without triggering a page fault.
+    SIZE_T QuotaPeakPagedPoolUsage;             // The peak quota charged to the process for pool usage, in bytes.
+    SIZE_T QuotaPagedPoolUsage;                 // The quota charged to the process for paged pool usage, in bytes.
+    SIZE_T QuotaPeakNonPagedPoolUsage;          // The peak quota charged to the process for nonpaged pool usage, in bytes.
+    SIZE_T QuotaNonPagedPoolUsage;              // The current quota charged to the process for nonpaged pool usage.
+    SIZE_T PagefileUsage;                       // The total number of bytes of page file storage in use by the process.
+    SIZE_T PeakPagefileUsage;                   // The maximum number of bytes of page-file storage used by the process.
+    SIZE_T PrivatePageCount;                    // The number of memory pages allocated for the use by the process.
+    LARGE_INTEGER ReadOperationCount;           // The total number of read operations performed.
+    LARGE_INTEGER WriteOperationCount;          // The total number of write operations performed.
+    LARGE_INTEGER OtherOperationCount;          // The total number of I/O operations performed other than read and write operations.
+    LARGE_INTEGER ReadTransferCount;            // The total number of bytes read during a read operation.
+    LARGE_INTEGER WriteTransferCount;           // The total number of bytes written during a write operation.
+    LARGE_INTEGER OtherTransferCount;           // The total number of bytes transferred during operations other than read and write operations.
+    SYSTEM_THREAD_INFORMATION Threads[1];       // This type is not defined in the structure but was added for convenience.
+} SYSTEM_PROCESS_INFORMATION, * PSYSTEM_PROCESS_INFORMATION;
 
 typedef enum _SYSTEM_INFORMATION_CLASS
 {
@@ -301,359 +401,10 @@ typedef enum _SYSTEM_INFORMATION_CLASS
     MaxSystemInfoClass
 } SYSTEM_INFORMATION_CLASS;
 
-typedef enum _NOTIFY_ROUTINE_TYPE {
-    ProcessCreateCallback
-} NOTIFY_ROUTINE_TYPE;
 
-NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp);
-NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp);
-NTSTATUS DriverRead(PDEVICE_OBJECT, PIRP Irp);
-VOID DriverUnload(PDRIVER_OBJECT DriverObject);
-
-typedef NTSTATUS(*ZwQuerySystemInformation_t)(
+typedef NTSTATUS(NTAPI* fnNtQuerySystemInformation)(
     SYSTEM_INFORMATION_CLASS SystemInformationClass,
     PVOID SystemInformation,
     ULONG SystemInformationLength,
     PULONG ReturnLength
-);
-
-UINT64 ResolveKernelBaseAddress() {
-    PRTL_PROCESS_MODULES moduleInfo = NULL;
-    NTSTATUS status;
-    ULONG returnLength = 0;
-	SIZE_T moduleInfoSize = 0;
-
-    UNICODE_STRING functionName;
-    RtlInitUnicodeString(&functionName, L"ZwQuerySystemInformation");
-	ZwQuerySystemInformation_t ZwQuerySystemInformation = (ZwQuerySystemInformation_t)MmGetSystemRoutineAddress(&functionName);
-	if (!ZwQuerySystemInformation) {
-		DbgPrint("[%s]: Failed to get ZwQuerySystemInformation address\n", DRIVER_NAME);
-		return 0;
-	}
-
-    status = ZwQuerySystemInformation(SystemModuleInformation, NULL, 0, &returnLength);
-	if (status != STATUS_INFO_LENGTH_MISMATCH) {
-		DbgPrint("[%s]: Failed to get module information size: 0x%X\n", DRIVER_NAME, status);
-		return 0;
-	}
-
-	moduleInfoSize = returnLength;
-    while (status == STATUS_INFO_LENGTH_MISMATCH) {
-        moduleInfoSize += sizeof(ULONG);
-		moduleInfo = (PRTL_PROCESS_MODULES)ExAllocatePool2(POOL_FLAG_NON_PAGED, moduleInfoSize, 'kBas');
-        if (!moduleInfo) {
-            return 0;
-        }
-
-		status = ZwQuerySystemInformation(SystemModuleInformation, moduleInfo, (ULONG)moduleInfoSize, &returnLength);
-
-		if (NT_SUCCESS(status)) {
-			break;
-		}
-
-		if (status == STATUS_INFO_LENGTH_MISMATCH) {
-			ExFreePoolWithTag(moduleInfo, 'kBas');
-			moduleInfo = NULL;
-		}
-    }
-
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("[%s]: Failed to query system module information: 0x%X\n", DRIVER_NAME, status);
-		if (moduleInfo) {
-			ExFreePoolWithTag(moduleInfo, 'kBas');
-		}
-		return 0;
-	}
-
-	UINT64 KernelBaseAddress = (UINT64)moduleInfo->Modules[0].ImageBase;
-
-	ExFreePoolWithTag(moduleInfo, 'kBas');
-
-	return KernelBaseAddress;
-}
-
-UINT64 FindNotifyRoutineAddress(UINT64 KernelBase, NOTIFY_ROUTINE_TYPE callbackType) {
-	UNICODE_STRING functionName;
-	RtlInitUnicodeString(&functionName, L"PsSetCreateProcessNotifyRoutine");
-	UINT64 PsSetCreateProcessNotifyRoutineAddress = (UINT64)MmGetSystemRoutineAddress(&functionName);
-	if (!PsSetCreateProcessNotifyRoutineAddress) {
-		DbgPrint("[%s]: Failed to get PsSetCreateProcessNotifyRoutine address\n", DRIVER_NAME);
-		return 0;
-	}
-
-    UINT64 tempAddress;
-    for (int i = 0; i < 200; i++) {
-		BYTE byte = *(BYTE*)(PsSetCreateProcessNotifyRoutineAddress + i);
-		if (byte == 0xE9 || byte == 0xE8) {
-			LONG relativeOffset = *(LONG*)(PsSetCreateProcessNotifyRoutineAddress + i + 1);
-			tempAddress = PsSetCreateProcessNotifyRoutineAddress + i + 5 + relativeOffset;
-            break;
-		}
-    }
-
-	if (!tempAddress) {
-		DbgPrint("[%s]: Failed to find the address of the notify routine\n", DRIVER_NAME);
-		return 0;
-	}
-
-	UINT64 notifyRoutineAddress = 0;
-    for (int i = 0; i < 300; i++) {
-        BYTE prefix = *(BYTE*)(tempAddress + i);
-        if ((prefix == 0x48 || prefix == 0x4C) && *(BYTE*)(tempAddress + i + 1) == 0x8D) {
-            LONG relativeOffset = *(LONG*)(tempAddress + i + 3);
-            notifyRoutineAddress = tempAddress + i + 7 + relativeOffset;
-            break;
-        }
-    }
-
-    return notifyRoutineAddress;
-}
-
-NTSTATUS SearchModules(ULONG64 ModuleAddr, ModulesData* ModuleFound)
-{
-    auto status = STATUS_SUCCESS;
-    ULONG  modulesSize = 0;
-    AUX_MODULE_EXTENDED_INFO* modules = nullptr;
-    ULONG  numberOfModules = 0;
-    ULONG  i = 0;
-
-    ModulesData ModuleFound2 = *ModuleFound;
-
-    status = AuxKlibInitialize();
-    if (!NT_SUCCESS(status))
-    {
-        DbgPrintEx(0, 0, "[%s] AuxKlibInitialize fail %d\n", DRIVER_NAME, status);
-        return status;
-    }
-
-    status = AuxKlibQueryModuleInformation(&modulesSize, sizeof(AUX_MODULE_EXTENDED_INFO), NULL);
-    if (!NT_SUCCESS(status) || modulesSize == 0) {
-        return status;
-    }
-
-    numberOfModules = modulesSize / sizeof(AUX_MODULE_EXTENDED_INFO);
-
-    modules = (AUX_MODULE_EXTENDED_INFO*)ExAllocatePoolWithTag(PagedPool, modulesSize, 'DRVR');
-    if (modules == NULL) {
-        status = STATUS_INSUFFICIENT_RESOURCES;
-        return status;
-    }
-    RtlZeroMemory(modules, modulesSize);
-
-
-    status = AuxKlibQueryModuleInformation(&modulesSize, sizeof(AUX_MODULE_EXTENDED_INFO), modules);
-    if (!NT_SUCCESS(status)) {
-        ExFreePoolWithTag(modules, 'DRVR');
-        return status;
-    }
-
-    for (i = 0; i < numberOfModules; i++)
-    {
-        if (ModuleAddr > (ULONG64)modules[i].BasicInfo.ImageBase &&
-            ModuleAddr < ((ULONG64)modules[i].BasicInfo.ImageBase + modules[i].ImageSize))
-        {
-            DbgPrintEx(0, 0, "[%s] Found: %s\n", DRIVER_NAME, modules[i].FullPathName + modules[i].FileNameOffset);
-
-            strcpy(ModuleFound2.ModuleName, (CHAR*)(modules[i].FullPathName + modules[i].FileNameOffset));
-
-            ModuleFound2.ModuleBase = (ULONG64)modules[i].BasicInfo.ImageBase;
-
-            *ModuleFound = ModuleFound2;
-
-            ExFreePoolWithTag(modules, 'DRVR');
-            return status;
-        }
-    }
-    ExFreePoolWithTag(modules, 'DRVR');
-
-    return status;
-}
-
-NTSTATUS ProcessNotifyRoutine(ULONG64 NotifyRoutine, UCHAR** pBuffer, ModulesData* pModuleFound, ULONG64* pCount) {
-    ULONG64 MagicPtr = 0, NotifyAddr = 0;
-    UCHAR* buffer = *pBuffer;
-    ULONG64 count = *pCount;
-
-    for (ULONG64 i = 0; i < 64; i++) {
-
-        MagicPtr = NotifyRoutine + i * 8;
-        NotifyAddr = *(PULONG64)(MagicPtr);
-
-        if (NotifyAddr != 0 && MmIsAddressValid((PVOID)NotifyAddr)) {
-
-            NotifyAddr = *(PULONG64)(NotifyAddr & 0xfffffffffffffff8);
-
-            DbgPrintEx(0, 0, "[%s] [%llu] NotifyRoutine: %llx \n", DRIVER_NAME, i, NotifyAddr);
-            count += 16;
-
-            memcpy(buffer, &i, 8);
-            buffer += 8;
-
-            memcpy(buffer, &NotifyAddr, 8);
-            buffer += 8;
-
-            SearchModules(NotifyAddr, pModuleFound);
-
-            if (pModuleFound->ModuleBase != 0) {
-
-                memcpy(buffer, pModuleFound->ModuleName, sizeof(pModuleFound->ModuleName));
-                buffer += 32;
-
-                pModuleFound->ModuleBase = NotifyAddr - pModuleFound->ModuleBase;
-
-                memcpy(buffer, &pModuleFound->ModuleBase, 8);
-                buffer += 8;
-
-                count += 8 + 32;
-            }
-            else {
-                count += 16;
-
-                memset(buffer, 0, 40);
-                buffer += 40;
-            }
-        }
-        else {
-            ULONG64 zero = 0;
-            memcpy(buffer, &i, 8);
-            buffer += 8;
-            memcpy(buffer, &zero, 8);
-            buffer += 8;
-            memset(buffer, 0, 32); 
-            buffer += 32;
-            memcpy(buffer, &zero, 8);
-            buffer += 8;
-            count += 16 + 40;
-        }
-    }
-
-    *pBuffer = buffer;
-    *pCount = count;
-
-    return STATUS_SUCCESS;
-}
-
-extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
-{
-	UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\Rm_ProcCallback");
-	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ProcCallback");
-	PDEVICE_OBJECT DeviceObject = NULL;
-	NTSTATUS status = STATUS_SUCCESS;
-
-	status = IoCreateDevice(
-		DriverObject,
-		0,
-		&DeviceName,
-		FILE_DEVICE_UNKNOWN,
-		FILE_DEVICE_SECURE_OPEN,
-		FALSE,
-		&DeviceObject);
-
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("[%s]: Failed to create device: 0x%X\n", DRIVER_NAME, status);
-		return status;
-	}
-
-	DriverObject->MajorFunction[IRP_MJ_CREATE] = DriverCreateClose;
-	DriverObject->MajorFunction[IRP_MJ_CLOSE] = DriverCreateClose;
-	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DriverDeviceControl;
-	DriverObject->MajorFunction[IRP_MJ_READ] = DriverRead;
-	DriverObject->DriverUnload = DriverUnload;
-
-	DriverObject->Flags |= DO_BUFFERED_IO;
-
-	status = IoCreateSymbolicLink(&SymbolicLinkName, &DeviceName);
-	
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("Failed to create symbolic link: 0x%X\n", status);
-		IoDeleteDevice(DeviceObject);
-		return status;
-	}
-
-	DbgPrint("[%s]: Driver loaded successfully\n", DRIVER_NAME);
-
-	return STATUS_SUCCESS;
-}
-
-NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp)
-{
-	Irp->IoStatus.Status = STATUS_SUCCESS;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	return STATUS_SUCCESS;
-}
-
-VOID DriverUnload(PDRIVER_OBJECT DriverObject)
-{
-	PDEVICE_OBJECT DeviceObject = DriverObject->DeviceObject;
-	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ProcCallback");
-
-	IoDeleteSymbolicLink(&SymbolicLinkName);
-
-	if (DeviceObject != NULL) {
-		IoDeleteDevice(DeviceObject);
-	}
-	
-	DbgPrint("[%s]: Driver unloaded successfully\n", DRIVER_NAME);
-}
-
-NTSTATUS DriverRead(PDEVICE_OBJECT, PIRP Irp)
-{
-
-	NTSTATUS status = STATUS_SUCCESS;
-	ULONG64 count = 0;
-
-	ModulesData ModuleFound;
-	ModuleFound.ModuleBase = 0;
-	RtlFillMemory(&ModuleFound.ModuleName, sizeof(ModuleFound.ModuleName), 0);
-
-	PUCHAR Buffer = (PUCHAR)Irp->AssociatedIrp.SystemBuffer;
-	if (Buffer == NULL) {
-		DbgPrint("[%s]: Invalid input buffer\n", DRIVER_NAME);
-		return STATUS_INVALID_PARAMETER;
-	}
-
-	DWORD64 KernelBase = ResolveKernelBaseAddress();
-    if (!KernelBase) return STATUS_SUCCESS;
-
-	ULONG64 PspCreateProcessNotifyRoutineAddress = FindNotifyRoutineAddress(KernelBase, ProcessCreateCallback);
-	if (!PspCreateProcessNotifyRoutineAddress) 
-        return STATUS_SUCCESS;
-
-    ProcessNotifyRoutine(PspCreateProcessNotifyRoutineAddress, &Buffer, &ModuleFound, &count);
-
-	Irp->IoStatus.Status = STATUS_SUCCESS;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	return STATUS_SUCCESS;
-}
-
-NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
-{
-	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
-	NTSTATUS status = STATUS_SUCCESS;
-
-	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_PROC_CALLBACK && irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(PROC_CALLBACK_DATA))
-	{
-		PPROC_CALLBACK_DATA ProcCallbackData = (PPROC_CALLBACK_DATA)Irp->AssociatedIrp.SystemBuffer;
-
-		if (ProcCallbackData != NULL)
-		{
-			DbgPrint("[%s]: Received process ID: %lu\n", DRIVER_NAME, ProcCallbackData->ProcessId);
-			status = STATUS_SUCCESS;
-		}
-		else {
-			DbgPrint("[%s]: Invalid input buffer\n", DRIVER_NAME);
-			status = STATUS_INVALID_PARAMETER;
-		}
-	}
-	else {
-		DbgPrint("[%s]: Invalid IOCTL code or input buffer length\n", DRIVER_NAME);
-		status = STATUS_INVALID_PARAMETER;
-	}
-
-	Irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	return STATUS_INVALID_PARAMETER;
-}
+    );
