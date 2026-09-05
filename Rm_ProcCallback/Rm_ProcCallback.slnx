@@ -6,4 +6,7 @@
   <Project Path="Rm_ProcCallback/Rm_ProcCallback.vcxproj">
     <Deploy />
   </Project>
+  <Project Path="Rm_ProcCallbackClient/Rm_ProcCallbackClient.vcxproj">
+    <Platform Project="x64" />
+  </Project>
 </Solution>

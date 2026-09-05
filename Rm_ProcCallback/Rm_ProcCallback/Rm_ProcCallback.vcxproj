@@ -80,6 +80,9 @@
     <DriverSign>
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
+    <Link>
+      <AdditionalDependencies>AUX_KLIB.LIB;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DriverSign>

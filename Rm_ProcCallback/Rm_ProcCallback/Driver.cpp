@@ -3,27 +3,23 @@
 #include <minwindef.h>
 #include <aux_klib.h>
 
-/* 
-    https://www.bordergate.co.uk/neutralising-kernel-callbacks/ 
+#pragma comment(lib, "Aux_Klib.lib")
+
+/*
+    https://www.bordergate.co.uk/neutralising-kernel-callbacks/
 */
 
 #define DRIVER_NAME "Rm_ProcCallback"
 #define IOCTL_RM_PROC_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 typedef struct _PROC_CALLBACK_DATA {
-	ULONG ProcessId;
+    ULONG ProcessId;
 } PROC_CALLBACK_DATA, * PPROC_CALLBACK_DATA;
 
 struct ModulesData {
-	CHAR ModuleName[256];
-	ULONG64 ModuleBase;
+    CHAR ModuleName[256];
+    ULONG64 ModuleBase;
 };
-
-typedef struct _RTL_PROCESS_MODULES
-{
-    ULONG NumberOfModules;
-    _Field_size_(NumberOfModules) RTL_PROCESS_MODULE_INFORMATION Modules[1];
-} RTL_PROCESS_MODULES, * PRTL_PROCESS_MODULES;
 
 typedef struct _RTL_PROCESS_MODULE_INFORMATION
 {
@@ -38,6 +34,12 @@ typedef struct _RTL_PROCESS_MODULE_INFORMATION
     USHORT OffsetToFileName;
     UCHAR FullPathName[256];
 } RTL_PROCESS_MODULE_INFORMATION, * PRTL_PROCESS_MODULE_INFORMATION;
+
+typedef struct _RTL_PROCESS_MODULES
+{
+    ULONG NumberOfModules;
+    _Field_size_(NumberOfModules) RTL_PROCESS_MODULE_INFORMATION Modules[1];
+} RTL_PROCESS_MODULES, * PRTL_PROCESS_MODULES;
 
 typedef enum _SYSTEM_INFORMATION_CLASS
 {
@@ -301,6 +303,7 @@ typedef enum _SYSTEM_INFORMATION_CLASS
     MaxSystemInfoClass
 } SYSTEM_INFORMATION_CLASS;
 
+
 typedef enum _NOTIFY_ROUTINE_TYPE {
     ProcessCreateCallback
 } NOTIFY_ROUTINE_TYPE;
@@ -315,88 +318,88 @@ typedef NTSTATUS(*ZwQuerySystemInformation_t)(
     PVOID SystemInformation,
     ULONG SystemInformationLength,
     PULONG ReturnLength
-);
+    );
 
 UINT64 ResolveKernelBaseAddress() {
     PRTL_PROCESS_MODULES moduleInfo = NULL;
     NTSTATUS status;
     ULONG returnLength = 0;
-	SIZE_T moduleInfoSize = 0;
+    SIZE_T moduleInfoSize = 0;
 
     UNICODE_STRING functionName;
     RtlInitUnicodeString(&functionName, L"ZwQuerySystemInformation");
-	ZwQuerySystemInformation_t ZwQuerySystemInformation = (ZwQuerySystemInformation_t)MmGetSystemRoutineAddress(&functionName);
-	if (!ZwQuerySystemInformation) {
-		DbgPrint("[%s]: Failed to get ZwQuerySystemInformation address\n", DRIVER_NAME);
-		return 0;
-	}
+    ZwQuerySystemInformation_t ZwQuerySystemInformation = (ZwQuerySystemInformation_t)MmGetSystemRoutineAddress(&functionName);
+    if (!ZwQuerySystemInformation) {
+        DbgPrint("[%s]: Failed to get ZwQuerySystemInformation address\n", DRIVER_NAME);
+        return 0;
+    }
 
     status = ZwQuerySystemInformation(SystemModuleInformation, NULL, 0, &returnLength);
-	if (status != STATUS_INFO_LENGTH_MISMATCH) {
-		DbgPrint("[%s]: Failed to get module information size: 0x%X\n", DRIVER_NAME, status);
-		return 0;
-	}
+    if (status != STATUS_INFO_LENGTH_MISMATCH) {
+        DbgPrint("[%s]: Failed to get module information size: 0x%X\n", DRIVER_NAME, status);
+        return 0;
+    }
 
-	moduleInfoSize = returnLength;
+    moduleInfoSize = returnLength;
     while (status == STATUS_INFO_LENGTH_MISMATCH) {
         moduleInfoSize += sizeof(ULONG);
-		moduleInfo = (PRTL_PROCESS_MODULES)ExAllocatePool2(POOL_FLAG_NON_PAGED, moduleInfoSize, 'kBas');
+        moduleInfo = (PRTL_PROCESS_MODULES)ExAllocatePool2(POOL_FLAG_NON_PAGED, moduleInfoSize, 'kBas');
         if (!moduleInfo) {
             return 0;
         }
 
-		status = ZwQuerySystemInformation(SystemModuleInformation, moduleInfo, (ULONG)moduleInfoSize, &returnLength);
+        status = ZwQuerySystemInformation(SystemModuleInformation, moduleInfo, (ULONG)moduleInfoSize, &returnLength);
 
-		if (NT_SUCCESS(status)) {
-			break;
-		}
+        if (NT_SUCCESS(status)) {
+            break;
+        }
 
-		if (status == STATUS_INFO_LENGTH_MISMATCH) {
-			ExFreePoolWithTag(moduleInfo, 'kBas');
-			moduleInfo = NULL;
-		}
+        if (status == STATUS_INFO_LENGTH_MISMATCH) {
+            ExFreePoolWithTag(moduleInfo, 'kBas');
+            moduleInfo = NULL;
+        }
     }
 
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("[%s]: Failed to query system module information: 0x%X\n", DRIVER_NAME, status);
-		if (moduleInfo) {
-			ExFreePoolWithTag(moduleInfo, 'kBas');
-		}
-		return 0;
-	}
+    if (!NT_SUCCESS(status)) {
+        DbgPrint("[%s]: Failed to query system module information: 0x%X\n", DRIVER_NAME, status);
+        if (moduleInfo) {
+            ExFreePoolWithTag(moduleInfo, 'kBas');
+        }
+        return 0;
+    }
 
-	UINT64 KernelBaseAddress = (UINT64)moduleInfo->Modules[0].ImageBase;
+    UINT64 KernelBaseAddress = (UINT64)moduleInfo->Modules[0].ImageBase;
 
-	ExFreePoolWithTag(moduleInfo, 'kBas');
+    ExFreePoolWithTag(moduleInfo, 'kBas');
 
-	return KernelBaseAddress;
+    return KernelBaseAddress;
 }
 
-UINT64 FindNotifyRoutineAddress(UINT64 KernelBase, NOTIFY_ROUTINE_TYPE callbackType) {
-	UNICODE_STRING functionName;
-	RtlInitUnicodeString(&functionName, L"PsSetCreateProcessNotifyRoutine");
-	UINT64 PsSetCreateProcessNotifyRoutineAddress = (UINT64)MmGetSystemRoutineAddress(&functionName);
-	if (!PsSetCreateProcessNotifyRoutineAddress) {
-		DbgPrint("[%s]: Failed to get PsSetCreateProcessNotifyRoutine address\n", DRIVER_NAME);
-		return 0;
-	}
-
-    UINT64 tempAddress;
-    for (int i = 0; i < 200; i++) {
-		BYTE byte = *(BYTE*)(PsSetCreateProcessNotifyRoutineAddress + i);
-		if (byte == 0xE9 || byte == 0xE8) {
-			LONG relativeOffset = *(LONG*)(PsSetCreateProcessNotifyRoutineAddress + i + 1);
-			tempAddress = PsSetCreateProcessNotifyRoutineAddress + i + 5 + relativeOffset;
-            break;
-		}
+UINT64 FindNotifyRoutineAddress() {
+    UNICODE_STRING functionName;
+    RtlInitUnicodeString(&functionName, L"PsSetCreateProcessNotifyRoutine");
+    UINT64 PsSetCreateProcessNotifyRoutineAddress = (UINT64)MmGetSystemRoutineAddress(&functionName);
+    if (!PsSetCreateProcessNotifyRoutineAddress) {
+        DbgPrint("[%s]: Failed to get PsSetCreateProcessNotifyRoutine address\n", DRIVER_NAME);
+        return 0;
     }
 
-	if (!tempAddress) {
-		DbgPrint("[%s]: Failed to find the address of the notify routine\n", DRIVER_NAME);
-		return 0;
-	}
+    UINT64 tempAddress = 0;
+    for (int i = 0; i < 200; i++) {
+        BYTE byte = *(BYTE*)(PsSetCreateProcessNotifyRoutineAddress + i);
+        if (byte == 0xE9 || byte == 0xE8) {
+            LONG relativeOffset = *(LONG*)(PsSetCreateProcessNotifyRoutineAddress + i + 1);
+            tempAddress = PsSetCreateProcessNotifyRoutineAddress + i + 5 + relativeOffset;
+            break;
+        }
+    }
 
-	UINT64 notifyRoutineAddress = 0;
+    if (!tempAddress) {
+        DbgPrint("[%s]: Failed to find the address of the notify routine\n", DRIVER_NAME);
+        return 0;
+    }
+
+    UINT64 notifyRoutineAddress = 0;
     for (int i = 0; i < 300; i++) {
         BYTE prefix = *(BYTE*)(tempAddress + i);
         if ((prefix == 0x48 || prefix == 0x4C) && *(BYTE*)(tempAddress + i + 1) == 0x8D) {
@@ -433,13 +436,12 @@ NTSTATUS SearchModules(ULONG64 ModuleAddr, ModulesData* ModuleFound)
 
     numberOfModules = modulesSize / sizeof(AUX_MODULE_EXTENDED_INFO);
 
-    modules = (AUX_MODULE_EXTENDED_INFO*)ExAllocatePoolWithTag(PagedPool, modulesSize, 'DRVR');
+    modules = (AUX_MODULE_EXTENDED_INFO*)ExAllocatePool2(POOL_FLAG_NON_PAGED, modulesSize, 'DRVR');
     if (modules == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;
         return status;
     }
     RtlZeroMemory(modules, modulesSize);
-
 
     status = AuxKlibQueryModuleInformation(&modulesSize, sizeof(AUX_MODULE_EXTENDED_INFO), modules);
     if (!NT_SUCCESS(status)) {
@@ -455,7 +457,6 @@ NTSTATUS SearchModules(ULONG64 ModuleAddr, ModulesData* ModuleFound)
             DbgPrintEx(0, 0, "[%s] Found: %s\n", DRIVER_NAME, modules[i].FullPathName + modules[i].FileNameOffset);
 
             strcpy(ModuleFound2.ModuleName, (CHAR*)(modules[i].FullPathName + modules[i].FileNameOffset));
-
             ModuleFound2.ModuleBase = (ULONG64)modules[i].BasicInfo.ImageBase;
 
             *ModuleFound = ModuleFound2;
@@ -475,6 +476,8 @@ NTSTATUS ProcessNotifyRoutine(ULONG64 NotifyRoutine, UCHAR** pBuffer, ModulesDat
     ULONG64 count = *pCount;
 
     for (ULONG64 i = 0; i < 64; i++) {
+
+        RtlZeroMemory(pModuleFound, sizeof(ModulesData));
 
         MagicPtr = NotifyRoutine + i * 8;
         NotifyAddr = *(PULONG64)(MagicPtr);
@@ -496,7 +499,7 @@ NTSTATUS ProcessNotifyRoutine(ULONG64 NotifyRoutine, UCHAR** pBuffer, ModulesDat
 
             if (pModuleFound->ModuleBase != 0) {
 
-                memcpy(buffer, pModuleFound->ModuleName, sizeof(pModuleFound->ModuleName));
+                memcpy(buffer, pModuleFound->ModuleName, 32);
                 buffer += 32;
 
                 pModuleFound->ModuleBase = NotifyAddr - pModuleFound->ModuleBase;
@@ -507,8 +510,7 @@ NTSTATUS ProcessNotifyRoutine(ULONG64 NotifyRoutine, UCHAR** pBuffer, ModulesDat
                 count += 8 + 32;
             }
             else {
-                count += 16;
-
+                count += 40;
                 memset(buffer, 0, 40);
                 buffer += 40;
             }
@@ -519,7 +521,7 @@ NTSTATUS ProcessNotifyRoutine(ULONG64 NotifyRoutine, UCHAR** pBuffer, ModulesDat
             buffer += 8;
             memcpy(buffer, &zero, 8);
             buffer += 8;
-            memset(buffer, 0, 32); 
+            memset(buffer, 0, 32);
             buffer += 32;
             memcpy(buffer, &zero, 8);
             buffer += 8;
@@ -535,125 +537,121 @@ NTSTATUS ProcessNotifyRoutine(ULONG64 NotifyRoutine, UCHAR** pBuffer, ModulesDat
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 {
-	UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\Rm_ProcCallback");
-	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ProcCallback");
-	PDEVICE_OBJECT DeviceObject = NULL;
-	NTSTATUS status = STATUS_SUCCESS;
+    UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\Rm_ProcCallback");
+    UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ProcCallback");
+    PDEVICE_OBJECT DeviceObject = NULL;
+    NTSTATUS status = STATUS_SUCCESS;
 
-	status = IoCreateDevice(
-		DriverObject,
-		0,
-		&DeviceName,
-		FILE_DEVICE_UNKNOWN,
-		FILE_DEVICE_SECURE_OPEN,
-		FALSE,
-		&DeviceObject);
+    status = IoCreateDevice(
+        DriverObject,
+        0,
+        &DeviceName,
+        FILE_DEVICE_UNKNOWN,
+        FILE_DEVICE_SECURE_OPEN,
+        FALSE,
+        &DeviceObject);
 
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("[%s]: Failed to create device: 0x%X\n", DRIVER_NAME, status);
-		return status;
-	}
+    if (!NT_SUCCESS(status)) {
+        DbgPrint("[%s]: Failed to create device: 0x%X\n", DRIVER_NAME, status);
+        return status;
+    }
 
-	DriverObject->MajorFunction[IRP_MJ_CREATE] = DriverCreateClose;
-	DriverObject->MajorFunction[IRP_MJ_CLOSE] = DriverCreateClose;
-	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DriverDeviceControl;
-	DriverObject->MajorFunction[IRP_MJ_READ] = DriverRead;
-	DriverObject->DriverUnload = DriverUnload;
+    DriverObject->MajorFunction[IRP_MJ_CREATE] = DriverCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE] = DriverCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DriverDeviceControl;
+    DriverObject->MajorFunction[IRP_MJ_READ] = DriverRead;
+    DriverObject->DriverUnload = DriverUnload;
 
-	DriverObject->Flags |= DO_BUFFERED_IO;
+    DriverObject->Flags |= DO_BUFFERED_IO;
 
-	status = IoCreateSymbolicLink(&SymbolicLinkName, &DeviceName);
-	
-	if (!NT_SUCCESS(status)) {
-		DbgPrint("Failed to create symbolic link: 0x%X\n", status);
-		IoDeleteDevice(DeviceObject);
-		return status;
-	}
+    status = IoCreateSymbolicLink(&SymbolicLinkName, &DeviceName);
 
-	DbgPrint("[%s]: Driver loaded successfully\n", DRIVER_NAME);
+    if (!NT_SUCCESS(status)) {
+        DbgPrint("Failed to create symbolic link: 0x%X\n", status);
+        IoDeleteDevice(DeviceObject);
+        return status;
+    }
 
-	return STATUS_SUCCESS;
+    DbgPrint("[%s]: Driver loaded successfully\n", DRIVER_NAME);
+
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp)
 {
-	Irp->IoStatus.Status = STATUS_SUCCESS;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	return STATUS_SUCCESS;
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
 }
 
 VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 {
-	PDEVICE_OBJECT DeviceObject = DriverObject->DeviceObject;
-	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ProcCallback");
+    PDEVICE_OBJECT DeviceObject = DriverObject->DeviceObject;
+    UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ProcCallback");
 
-	IoDeleteSymbolicLink(&SymbolicLinkName);
+    IoDeleteSymbolicLink(&SymbolicLinkName);
 
-	if (DeviceObject != NULL) {
-		IoDeleteDevice(DeviceObject);
-	}
-	
-	DbgPrint("[%s]: Driver unloaded successfully\n", DRIVER_NAME);
+    if (DeviceObject != NULL) {
+        IoDeleteDevice(DeviceObject);
+    }
+
+    DbgPrint("[%s]: Driver unloaded successfully\n", DRIVER_NAME);
 }
 
 NTSTATUS DriverRead(PDEVICE_OBJECT, PIRP Irp)
 {
-
-	NTSTATUS status = STATUS_SUCCESS;
-	ULONG64 count = 0;
-
-	ModulesData ModuleFound;
-	ModuleFound.ModuleBase = 0;
-	RtlFillMemory(&ModuleFound.ModuleName, sizeof(ModuleFound.ModuleName), 0);
-
-	PUCHAR Buffer = (PUCHAR)Irp->AssociatedIrp.SystemBuffer;
-	if (Buffer == NULL) {
-		DbgPrint("[%s]: Invalid input buffer\n", DRIVER_NAME);
-		return STATUS_INVALID_PARAMETER;
-	}
-
-	DWORD64 KernelBase = ResolveKernelBaseAddress();
-    if (!KernelBase) return STATUS_SUCCESS;
-
-	ULONG64 PspCreateProcessNotifyRoutineAddress = FindNotifyRoutineAddress(KernelBase, ProcessCreateCallback);
-	if (!PspCreateProcessNotifyRoutineAddress) 
-        return STATUS_SUCCESS;
-
-    ProcessNotifyRoutine(PspCreateProcessNotifyRoutineAddress, &Buffer, &ModuleFound, &count);
-
-	Irp->IoStatus.Status = STATUS_SUCCESS;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	return STATUS_SUCCESS;
+    Irp->IoStatus.Status = STATUS_NOT_IMPLEMENTED;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
 {
-	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
-	NTSTATUS status = STATUS_SUCCESS;
+    PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
+    NTSTATUS status = STATUS_SUCCESS;
+    ULONG64 count = 0;
 
-	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_PROC_CALLBACK && irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(PROC_CALLBACK_DATA))
-	{
-		PPROC_CALLBACK_DATA ProcCallbackData = (PPROC_CALLBACK_DATA)Irp->AssociatedIrp.SystemBuffer;
+    if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_PROC_CALLBACK)
+    {
+        ULONG outLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
 
-		if (ProcCallbackData != NULL)
-		{
-			DbgPrint("[%s]: Received process ID: %lu\n", DRIVER_NAME, ProcCallbackData->ProcessId);
-			status = STATUS_SUCCESS;
-		}
-		else {
-			DbgPrint("[%s]: Invalid input buffer\n", DRIVER_NAME);
-			status = STATUS_INVALID_PARAMETER;
-		}
-	}
-	else {
-		DbgPrint("[%s]: Invalid IOCTL code or input buffer length\n", DRIVER_NAME);
-		status = STATUS_INVALID_PARAMETER;
-	}
+        if (outLen >= (64 * (8 + 8 + 32 + 8)))
+        {
+            PUCHAR Buffer = (PUCHAR)Irp->AssociatedIrp.SystemBuffer;
+            ModulesData ModuleFound;
+            ModuleFound.ModuleBase = 0;
+            RtlFillMemory(&ModuleFound.ModuleName, sizeof(ModuleFound.ModuleName), 0);
 
-	Irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-	return STATUS_INVALID_PARAMETER;
+            DWORD64 KernelBase = ResolveKernelBaseAddress();
+            if (!KernelBase) {
+                status = STATUS_UNSUCCESSFUL;
+            }
+            else {
+                ULONG64 PspCreateProcessNotifyRoutineAddress = FindNotifyRoutineAddress();
+                if (!PspCreateProcessNotifyRoutineAddress) {
+                    status = STATUS_UNSUCCESSFUL;
+                }
+                else {
+                    ProcessNotifyRoutine(PspCreateProcessNotifyRoutineAddress, &Buffer, &ModuleFound, &count);
+                    status = STATUS_SUCCESS;
+                }
+            }
+        }
+        else {
+            DbgPrint("[%s]: Output buffer too small\n", DRIVER_NAME);
+            status = STATUS_BUFFER_TOO_SMALL;
+            count = 0;
+        }
+    }
+    else {
+        DbgPrint("[%s]: Invalid IOCTL code\n", DRIVER_NAME);
+        status = STATUS_INVALID_PARAMETER;
+    }
+
+    Irp->IoStatus.Status = status;
+    Irp->IoStatus.Information = (ULONG_PTR)count;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return status;
 }
