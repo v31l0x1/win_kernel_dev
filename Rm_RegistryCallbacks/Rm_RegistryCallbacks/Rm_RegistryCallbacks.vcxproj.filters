@@ -19,8 +19,8 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Inf Include="Rm_RegistryCallbacks.inf">
-      <Filter>Driver Files</Filter>
-    </Inf>
+    <ClCompile Include="Driver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
