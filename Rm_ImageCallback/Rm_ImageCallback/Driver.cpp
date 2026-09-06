@@ -377,7 +377,7 @@ UINT64 ResolveKernelBaseAddress() {
 
 UINT64 FindNotifyRoutineAddress() {
     UNICODE_STRING functionName;
-    RtlInitUnicodeString(&functionName, L"PsSetImageNotifyRoutine");
+    RtlInitUnicodeString(&functionName, L"PsSetLoadImageNotifyRoutine");
     UINT64 PsSetImageNotifyRoutineAddress = (UINT64)MmGetSystemRoutineAddress(&functionName);
     if (!PsSetImageNotifyRoutineAddress) {
         DbgPrint("[%s]: Failed to get PsSetImageNotifyRoutine address\n", DRIVER_NAME);
