@@ -39,7 +39,7 @@ VOID EnumCallbacks(BYTE* buffer, DWORD size) {
 	}
 }
 
-HANDLE OpenDriver()
+HANDLE GetDriverHandle(VOID)
 {
 	HANDLE hDevice = CreateFileW(
 		L"\\\\.\\Rm_ThreadsCallback",
@@ -111,7 +111,7 @@ BOOL ListCallbacks(HANDLE hDevice)
 
 int main(int argc, char* argv[])
 {
-	HANDLE hDevice = OpenDriver();
+	HANDLE hDevice = GetDriverHandle();
 	if (hDevice == INVALID_HANDLE_VALUE) {
 		return 1;
 	}
