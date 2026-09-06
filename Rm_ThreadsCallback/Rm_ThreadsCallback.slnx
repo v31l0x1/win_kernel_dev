@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="Rm_ThreadsCallback/Rm_ThreadsCallback.vcxproj">
+    <Deploy />
+  </Project>
+</Solution>
