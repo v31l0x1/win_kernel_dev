@@ -633,8 +633,8 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
     }
     else if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_REG_CALLBACK)
     {
-        PREG_CALLBACK_DATA pThreadCallbackData = (PREG_CALLBACK_DATA)Irp->AssociatedIrp.SystemBuffer;
-        if (pThreadCallbackData == NULL) {
+        PREG_CALLBACK_DATA pRegCallbackData = (PREG_CALLBACK_DATA)Irp->AssociatedIrp.SystemBuffer;
+        if (pRegCallbackData == NULL) {
             DbgPrint("[%s]: Invalid input buffer\n", DRIVER_NAME);
             status = STATUS_INVALID_PARAMETER;
             Irp->IoStatus.Status = status;
@@ -643,35 +643,26 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
             return status;
         }
 
-        DbgPrint("[%s]: Removing Registry callback at Index: %lu\n", DRIVER_NAME, pThreadCallbackData->Index);
+        DbgPrint("[%s]: Removing Registry callback at Index: %lu\n", DRIVER_NAME, pRegCallbackData->Index);
 
         DWORD64 KernelBase = ResolveKernelBaseAddress();
         if (!KernelBase)
             return STATUS_UNSUCCESSFUL;
 
-        ULONG64 PspCreateThreadNotifyRoutineAddress = FindNotifyRoutineAddress();
-        if (!PspCreateThreadNotifyRoutineAddress)
+        ULONG64 CallbackListHead = FindNotifyRoutineAddress();
+        if (!CallbackListHead)
             return STATUS_UNSUCCESSFUL;
 
-        ULONG64 NotifyRoutineAddr, TempAddr = 0;
-        for (int i = 0; i < 64; i++) {
-            TempAddr = PspCreateThreadNotifyRoutineAddress + i * 8;
-
-            NotifyRoutineAddr = *(PULONG64)(TempAddr);
-
-            if (MmIsAddressValid((PVOID)NotifyRoutineAddr) && NotifyRoutineAddr != 0) {
-
-                NotifyRoutineAddr = *(PULONG64)(TempAddr & 0xfffffffffffffff8);
-
-                DbgPrint("[%s]: [Index: %d] NotifyRoutineAddr: %llx\n", DRIVER_NAME, i, NotifyRoutineAddr);
-
-                if (pThreadCallbackData->Index == i) {
-                    RtlZeroMemory((PVOID)TempAddr, sizeof(ULONG64));
-                    status = STATUS_SUCCESS;
-                }
-            }
+		PREGISTRY_CALLBACK_ITEM CurrentRegistryCallback = (PREGISTRY_CALLBACK_ITEM)CallbackListHead;
+        for (int i = 0; i < pRegCallbackData->Index; i++) {
+            if ((PVOID)CurrentRegistryCallback->Item.Flink == (PVOID)CallbackListHead)
+				return STATUS_INVALID_PARAMETER;
+			CurrentRegistryCallback = (PREGISTRY_CALLBACK_ITEM)CurrentRegistryCallback->Item.Flink;
         }
 
+		RemoveEntryList(&CurrentRegistryCallback->Item);
+		RtlZeroMemory(&CurrentRegistryCallback->Function, sizeof(CurrentRegistryCallback->Function));
+		status = STATUS_SUCCESS;
     }
     else {
         DbgPrint("[%s]: Invalid IOCTL code\n", DRIVER_NAME);

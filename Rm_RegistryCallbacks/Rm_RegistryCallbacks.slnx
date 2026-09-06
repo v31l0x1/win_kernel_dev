@@ -6,4 +6,7 @@
   <Project Path="Rm_RegistryCallbacks/Rm_RegistryCallbacks.vcxproj">
     <Deploy />
   </Project>
+  <Project Path="Rm_RegistryCallbacksClient/Rm_RegistryCallbacksClient.vcxproj" Id="390890e7-5855-44a6-a982-e5fdc5878127">
+    <Platform Project="x64" />
+  </Project>
 </Solution>
