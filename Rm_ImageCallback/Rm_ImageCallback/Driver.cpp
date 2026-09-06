@@ -629,12 +629,12 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
                 status = STATUS_UNSUCCESSFUL;
             }
             else {
-                ULONG64 PspCreateProcessNotifyRoutineAddress = FindNotifyRoutineAddress();
-                if (!PspCreateProcessNotifyRoutineAddress) {
+                ULONG64 PsSetLoadImageNotifyRoutine = FindNotifyRoutineAddress();
+                if (!PsSetLoadImageNotifyRoutine) {
                     status = STATUS_UNSUCCESSFUL;
                 }
                 else {
-                    ProcessNotifyRoutine(PspCreateProcessNotifyRoutineAddress, &Buffer, &ModuleFound, &count);
+                    ProcessNotifyRoutine(PsSetLoadImageNotifyRoutine, &Buffer, &ModuleFound, &count);
                     status = STATUS_SUCCESS;
                 }
             }
@@ -663,13 +663,13 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
         if (!KernelBase)
             return STATUS_UNSUCCESSFUL;
 
-        ULONG64 PspCreateThreadNotifyRoutineAddress = FindNotifyRoutineAddress();
-        if (!PspCreateThreadNotifyRoutineAddress)
+        ULONG64 PsSetLoadImageNotifyRoutine = FindNotifyRoutineAddress();
+        if (!PsSetLoadImageNotifyRoutine)
             return STATUS_UNSUCCESSFUL;
 
         ULONG64 NotifyRoutineAddr, TempAddr = 0;
         for (int i = 0; i < 64; i++) {
-            TempAddr = PspCreateThreadNotifyRoutineAddress + i * 8;
+            TempAddr = PsSetLoadImageNotifyRoutine + i * 8;
 
             NotifyRoutineAddr = *(PULONG64)(TempAddr);
 

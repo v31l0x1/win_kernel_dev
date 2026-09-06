@@ -6,7 +6,7 @@
   <Project Path="Rm_ThreadsCallback/Rm_ThreadsCallback.vcxproj">
     <Deploy />
   </Project>
-  <Project Path="Rm_ThreadsCallbackClient/Rm_ThreadsCallbackClient.vcxproj">
+  <Project Path="Rm_ThreadsCallbackClient/Rm_ThreadsCallbackClient.vcxproj" Id="a9fdb90c-faaf-4d20-8461-7db7a07754f0">
     <Platform Project="x64" />
   </Project>
 </Solution>

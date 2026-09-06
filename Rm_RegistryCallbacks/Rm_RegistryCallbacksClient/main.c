@@ -124,7 +124,6 @@ BOOL RemoveCallbacks(HANDLE hDevice, ULONG index)
 
 BOOL ListCallbacks(HANDLE hDevice)
 {
-    // 64 * 272 = 17408 bytes max
     BYTE Buffer[18000] = { 0 };
     DWORD bytesReturned = 0;
 

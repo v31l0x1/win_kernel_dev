@@ -6,7 +6,7 @@
   <Project Path="Rm_ImageCallback/Rm_ImageCallback.vcxproj">
     <Deploy />
   </Project>
-  <Project Path="Rm_ImageCallbackClient/Rm_ImageCallbackClient.vcxproj">
+  <Project Path="Rm_ImageCallbackClient/Rm_ImageCallbackClient.vcxproj" Id="596f6413-356c-499a-88c6-440c0ff254d8">
     <Platform Project="x64" />
   </Project>
 </Solution>

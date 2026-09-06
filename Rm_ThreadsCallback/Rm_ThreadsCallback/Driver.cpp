@@ -629,12 +629,12 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
                 status = STATUS_UNSUCCESSFUL;
             }
             else {
-                ULONG64 PspCreateProcessNotifyRoutineAddress = FindNotifyRoutineAddress();
-                if (!PspCreateProcessNotifyRoutineAddress) {
+                ULONG64 PspCreateThreadNotifyRoutineAddress = FindNotifyRoutineAddress();
+                if (!PspCreateThreadNotifyRoutineAddress) {
                     status = STATUS_UNSUCCESSFUL;
                 }
                 else {
-                    ProcessNotifyRoutine(PspCreateProcessNotifyRoutineAddress, &Buffer, &ModuleFound, &count);
+                    ProcessNotifyRoutine(PspCreateThreadNotifyRoutineAddress, &Buffer, &ModuleFound, &count);
                     status = STATUS_SUCCESS;
                 }
             }
