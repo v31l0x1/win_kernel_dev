@@ -37,10 +37,6 @@ VOID EnumCallbacks(BYTE* buffer, DWORD size) {
 			printf("    [%02llu] 0x%016llx  (%s + 0x%llx)\n", index, addr, ModuleName, ModuleBase);
 			activeCount++;
 		}
-		if (addr == 0) {
-			printf("    [%02llu] Removed callback %s\n", index, ModuleName);
-			removedCount++;
-		}
     }
 }
 
@@ -69,7 +65,7 @@ BOOL RemoveCallbacks(HANDLE hDevice, ULONG index)
 
 	DWORD bytesReturned = 0;
 	printf("[+] Removing process callback at index %lu...\n", index);
-
+	 
 	if (!DeviceIoControl(
 		hDevice,
 		IOCTL_RM_PROC_CALLBACK,

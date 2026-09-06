@@ -657,7 +657,7 @@ NTSTATUS DriverDeviceControl(PDEVICE_OBJECT, PIRP Irp)
             return status;
         }
         
-        DbgPrint("[%s]: Index: %lu\n", DRIVER_NAME, pProcCallbackData->Index);
+        DbgPrint("[%s]: Removing process callback at Index: %lu\n", DRIVER_NAME, pProcCallbackData->Index);
 
 		DWORD64 KernelBase = ResolveKernelBaseAddress();
         if (!KernelBase)
