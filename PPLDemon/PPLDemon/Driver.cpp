@@ -72,7 +72,20 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 
 NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
 {
+	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 	NTSTATUS status = STATUS_SUCCESS;
 
+	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_RM_PPL)
+	{
+		DbgPrint("[%s]: Removing PPL for the process");
+	}
+	else if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_ADD_PPL)
+	{
+		DbgPrint("[%s]: Adding PPL for the process");
+	}
 
+	Irp->IoStatus.Status = status;
+	Irp->IoStatus.Information = 0;
+	IoCompleteRequest(Irp, IO_NO_INCREMENT);
+	return status;
 }
