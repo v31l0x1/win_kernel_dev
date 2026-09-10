@@ -162,7 +162,32 @@ NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
 	}
 	else if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_ADD_PPL)
 	{
-		DbgPrint("[%s]: Adding PPL for the process", DRIVER_NAME);
+		DbgPrint("[%s]: Removing PPL for the process", DRIVER_NAME);
+		if (irpSp->Parameters.DeviceIoControl.InputBufferLength < sizeof(Protection)) {
+			status = STATUS_BUFFER_TOO_SMALL;
+		}
+		else {
+			PProtection pInfo = (PProtection)Irp->AssociatedIrp.SystemBuffer;
+			ULONG Pid = pInfo->ProcessId;
+			BYTE ProtectionValue = 0;
+
+			PEPROCESS Process;
+			status = PsLookupProcessByProcessId(ULongToHandle(Pid), &Process);
+			if (NT_SUCCESS(status)) {
+				DbgPrint("[%s]: Found EPROCESS for PID %lu at %p", DRIVER_NAME, Pid, Process);
+
+				ULONG_PTR EProtectionLevel = (ULONG_PTR)Process + ProtectionOffset;
+				*(BYTE*)EProtectionLevel = ProtectionValue;
+
+				DbgPrint("[%s]: Removed PPL for PID %lu", DRIVER_NAME, Pid);
+
+				ObDereferenceObject(Process);
+				status = STATUS_SUCCESS;
+			}
+			else {
+				status = STATUS_NOT_FOUND;
+			}
+		}
 
 	}
 
