@@ -9,6 +9,7 @@
 NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp);
 NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp);
 VOID DriverUnload(PDRIVER_OBJECT DriverObject);
+NTSTATUS GetProtectionOffset();
 
 ULONG ProtectionOffset = 0;
 typedef struct _Protection {
@@ -53,6 +54,14 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 		return status;
 	}
 	
+	if (GetProtectionOffset() != STATUS_SUCCESS) {
+		DbgPrint("[%s]: Unsupported Windows build\n", DRIVER_NAME);
+		IoDeleteSymbolicLink(&symbolicLinkName);
+		IoDeleteDevice(DeviceObject);
+		return STATUS_UNSUCCESSFUL;
+	}
+
+
 	return STATUS_SUCCESS;
 }
 
@@ -125,7 +134,7 @@ NTSTATUS GetProtectionOffset() {
 	return STATUS_UNSUCCESSFUL;
 }
 
-NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
+NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 {
 	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 	NTSTATUS status = STATUS_SUCCESS;
@@ -140,7 +149,7 @@ NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
 		else {
 			PProtection pInfo = (PProtection)Irp->AssociatedIrp.SystemBuffer;
 			ULONG Pid = pInfo->ProcessId;
-			BYTE ProtectionValue = 0x0;
+			ProtectionValue = 0x0;
 
 			PEPROCESS Process;
 			status = PsLookupProcessByProcessId(ULongToHandle(Pid), &Process);
@@ -169,7 +178,7 @@ NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
 		else {
 			PProtection pInfo = (PProtection)Irp->AssociatedIrp.SystemBuffer;
 			ULONG Pid = pInfo->ProcessId;
-			BYTE ProtectionValue = 0x31;
+			ProtectionValue = 0x31;
 
 			PEPROCESS Process;
 			status = PsLookupProcessByProcessId(ULongToHandle(Pid), &Process);

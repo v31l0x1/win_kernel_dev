@@ -6,4 +6,7 @@
   <Project Path="PPLDemon/PPLDemon.vcxproj">
     <Deploy />
   </Project>
+  <Project Path="PPLDemonClient/PPLDemonClient.vcxproj" Id="09ce3256-c54b-4460-9df2-065ffc699a33">
+    <Platform Project="x64" />
+  </Project>
 </Solution>

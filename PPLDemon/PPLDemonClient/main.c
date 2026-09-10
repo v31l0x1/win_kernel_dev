@@ -108,13 +108,13 @@ VOID ModifyPPL(DWORD pid, BOOL add) {
 		return;
 	}
 
-	wprintf(L"[+] Successfully %s PPL for process with PID: %lu\n", add ? "added" : "removed", pid);
+	wprintf(L"[+] Successfully %ls PPL for process with PID: %lu\n", add ? L"added" : L"removed", pid);
 }
 
-int main(int argc, wchar_t* argv[]) {
+int wmain(int argc, wchar_t* argv[]) {
 
 	if (argc != 3) {
-		wprintf(L"Usage: %s <process_name> <action>\n", argv[0]);
+		wprintf(L"Usage: %ls <process_name> <action>\n", argv[0]);
 		return 1;
 	}
 
@@ -127,7 +127,7 @@ int main(int argc, wchar_t* argv[]) {
 	DWORD pid = findProc(processName);
 
 	if (pid == 0) {
-		wprintf(L"[-] Process %s not found\n", processName);
+		wprintf(L"[-] Process %ls not found\n", processName);
 		return -1;
 	}
 
