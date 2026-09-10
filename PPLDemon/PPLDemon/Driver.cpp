@@ -140,7 +140,7 @@ NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
 		else {
 			PProtection pInfo = (PProtection)Irp->AssociatedIrp.SystemBuffer;
 			ULONG Pid = pInfo->ProcessId;
-			BYTE ProtectionValue = 0;
+			BYTE ProtectionValue = 0x0;
 
 			PEPROCESS Process;
 			status = PsLookupProcessByProcessId(ULongToHandle(Pid), &Process);
@@ -169,7 +169,7 @@ NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
 		else {
 			PProtection pInfo = (PProtection)Irp->AssociatedIrp.SystemBuffer;
 			ULONG Pid = pInfo->ProcessId;
-			BYTE ProtectionValue = 0;
+			BYTE ProtectionValue = 0x31;
 
 			PEPROCESS Process;
 			status = PsLookupProcessByProcessId(ULongToHandle(Pid), &Process);
@@ -179,8 +179,7 @@ NTSTATUS DriverIoControl(PDEVICE_OBJECT, PIRP Irp)
 				ULONG_PTR EProtectionLevel = (ULONG_PTR)Process + ProtectionOffset;
 				*(BYTE*)EProtectionLevel = ProtectionValue;
 
-				DbgPrint("[%s]: Removed PPL for PID %lu", DRIVER_NAME, Pid);
-
+				DbgPrint("[%s]: Added PPL for PID %lu", DRIVER_NAME, Pid);
 				ObDereferenceObject(Process);
 				status = STATUS_SUCCESS;
 			}
