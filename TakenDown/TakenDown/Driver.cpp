@@ -188,7 +188,6 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 {
 	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 	NTSTATUS status = STATUS_SUCCESS;
-	BYTE ProtectionValue;
 
 	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_TOKEN_DOWN)
 	{
