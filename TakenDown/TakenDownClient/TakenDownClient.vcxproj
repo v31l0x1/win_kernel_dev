@@ -141,6 +141,9 @@
   <ItemGroup>
     <ClCompile Include="TakenDownClient.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="defines.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
