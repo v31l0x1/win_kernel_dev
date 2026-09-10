@@ -25,7 +25,6 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 	NTSTATUS status;
 	PDEVICE_OBJECT DeviceObject = NULL;
 
-
 	status = IoCreateDevice(
 		DriverObject,
 		0,
@@ -46,6 +45,8 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 	DriverObject->MajorFunction[IRP_MJ_CLOSE] = DriverCreateClose;
 	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DeviceIoControl;
 	DriverObject->DriverUnload = DriverUnload;
+	
+	DeviceObject->Flags |= DO_BUFFERED_IO;
 
 	status = IoCreateSymbolicLink(&symbolicLinkName, &deviceName);
 
@@ -98,7 +99,7 @@ PVOID FindExplorerToken() {
 		procName[sizeof(procName) - 1] = '\0';
 
 		if (_stricmp((const char*)procName, "explorer.exe") == 0) {
-			PVOID explorerToken = (PVOID)((PUCHAR)currentProcess + TokenOffset);
+			PVOID explorerToken = *(PVOID*)((PUCHAR)currentProcess + TokenOffset);
 			DbgPrint("[%s]: Found explorer.exe process at %p, token at %p\n", DRIVER_NAME, currentProcess, explorerToken);
 			return explorerToken;
 		}
@@ -108,79 +109,80 @@ PVOID FindExplorerToken() {
 	} while (currentProcess != systemProcess);
 
 	DbgPrint("[%s]: explorer.exe process not found\n", DRIVER_NAME);
-	return NULL;
+	return NULL;	
 }
 
 NTSTATUS GetOffsets() {
-	RTL_OSVERSIONINFOW pversion;
+	RTL_OSVERSIONINFOW pVersion = { 0 };
+	pVersion.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOW);
 
-	RtlGetVersion(&pversion);
+	RtlGetVersion(&pVersion);
 
-	if (pversion.dwBuildNumber == 9600) {
+	if (pVersion.dwBuildNumber == 9600) {
 		TokenOffset = 0x348;
 		ImageFileNameOffset = 0x438;
 		ActiveProcessLinksOffset = 0x2e8;
 	}
-	else if (pversion.dwBuildNumber == 10240) {
+	else if (pVersion.dwBuildNumber == 10240) {
 		TokenOffset = 0x358;
 		ImageFileNameOffset = 0x448;
 		ActiveProcessLinksOffset = 0x2f0;
 	}
-	else if (pversion.dwBuildNumber == 10586) {
+	else if (pVersion.dwBuildNumber == 10586) {
 		TokenOffset = 0x358;
 		ImageFileNameOffset = 0x450;
 		ActiveProcessLinksOffset = 0x2f0;
 	}
-	else if (pversion.dwBuildNumber == 14393) {
+	else if (pVersion.dwBuildNumber == 14393) {
 		TokenOffset = 0x358;
 		ImageFileNameOffset = 0x450;
 		ActiveProcessLinksOffset = 0x2f0;
 	}
-	else if (pversion.dwBuildNumber == 15063) {
+	else if (pVersion.dwBuildNumber == 15063) {
 		TokenOffset = 0x358;
 		ImageFileNameOffset = 0x450;
 		ActiveProcessLinksOffset = 0x2e8;
 	}
-	else if (pversion.dwBuildNumber == 16299) {
+	else if (pVersion.dwBuildNumber == 16299) {
 		TokenOffset = 0x358;
 		ImageFileNameOffset = 0x450;
 		ActiveProcessLinksOffset = 0x2e8;
 	}
-	else if (pversion.dwBuildNumber == 17134) {
+	else if (pVersion.dwBuildNumber == 17134) {
 		TokenOffset = 0x358;
 		ImageFileNameOffset = 0x450;
 		ActiveProcessLinksOffset = 0x2e8;
 	}
-	else if (pversion.dwBuildNumber == 17763) {
+	else if (pVersion.dwBuildNumber == 17763) {
 		TokenOffset = 0x358;
 		ImageFileNameOffset = 0x16c;
 		ActiveProcessLinksOffset = 0x188;
 	}
-	else if (pversion.dwBuildNumber == 18362) {
+	else if (pVersion.dwBuildNumber == 18362) {
 		TokenOffset = 0x360;
 		ImageFileNameOffset = 0x450;
 		ActiveProcessLinksOffset = 0x2e8;
 	}
-	else if (pversion.dwBuildNumber >= 19041 && pversion.dwBuildNumber <= 22631) {
+	else if (pVersion.dwBuildNumber >= 19041 && pVersion.dwBuildNumber <= 22631) {
 		TokenOffset = 0x4b8;
 		ImageFileNameOffset = 0x5a8;
 		ActiveProcessLinksOffset = 0x448;
 	}
-	else if (pversion.dwBuildNumber >= 26100) {
+	else if (pVersion.dwBuildNumber >= 26100) {
 		TokenOffset = 0x248;
 		ImageFileNameOffset = 0x338;
 		ActiveProcessLinksOffset = 0x1d8;
 	}
 	else {
-		TokenOffset = NULL;
-		ImageFileNameOffset = NULL;
-		ActiveProcessLinksOffset = NULL;
+		TokenOffset = 0x248;
+		ImageFileNameOffset = 0x338;
+		ActiveProcessLinksOffset = 0x1d8;
 	}
 
 	if (TokenOffset && ImageFileNameOffset && ActiveProcessLinksOffset)
 		return STATUS_SUCCESS;
 
-	DbgPrint("[%s]: Unsupported Windows build %lu.", DRIVER_NAME, pversion.dwBuildNumber);
+	DbgPrint("[%s]: Unsupported Windows build %lu.", DRIVER_NAME, pVersion.dwBuildNumber);
 	return STATUS_UNSUCCESSFUL;
 }
 
@@ -206,7 +208,7 @@ NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 			else {
 				PEPROCESS Process;
 
-				status = PsLookupProcessByProcessId((HANDLE)(ULONG_PTR)token->ProcessId, &Process);
+				status = PsLookupProcessByProcessId(UlongToHandle(token->ProcessId), &Process);
 				if (NT_SUCCESS(status)) {
 					*(PVOID*)((PUCHAR)Process + TokenOffset) = explorerToken;
 

@@ -6,7 +6,7 @@
   <Project Path="TakenDown/TakenDown.vcxproj">
     <Deploy />
   </Project>
-  <Project Path="TakenDownClient/TakenDownClient.vcxproj">
+  <Project Path="TakenDownClient/TakenDownClient.vcxproj" Id="888bced0-240e-48ae-aa8d-493e9933800d">
     <Platform Project="x64" />
   </Project>
 </Solution>
