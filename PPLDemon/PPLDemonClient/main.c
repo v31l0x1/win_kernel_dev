@@ -111,8 +111,6 @@ VOID ModifyPPL(DWORD pid, BOOL add) {
 	wprintf(L"[+] Successfully %s PPL for process with PID: %lu\n", add ? "added" : "removed", pid);
 }
 
-
-
 int main(int argc, wchar_t* argv[]) {
 
 	if (argc != 3) {
