@@ -1,20 +1,105 @@
-// TakenSystemClient.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+#include "defines.h"
 
-#include <iostream>
+#define IOCTL_TOKEN_DOWN CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-int main()
-{
-    std::cout << "Hello World!\n";
+typedef struct _Token {
+	ULONG ProcessId;
+} Token, * PToken;
+
+LPCSTR GetPrivilegeAttributes(DWORD Attributes) {
+	if (Attributes & SE_PRIVILEGE_ENABLED) {
+		return "Enabled";
+	}
+	else if (Attributes & SE_PRIVILEGE_ENABLED_BY_DEFAULT) {
+		return "Enabled by default";
+	}
+	else if (Attributes & SE_PRIVILEGE_REMOVED) {
+		return "Removed";
+	}
+	else if (Attributes & SE_PRIVILEGE_USED_FOR_ACCESS) {
+		return "Used for access";
+	}
+	else {
+		return "Disabled";
+	}
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
+VOID GetPrivileges() {
 
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
+	HANDLE hToken = NULL;
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+		wprintf(L"[-] Failed to open process token\n");
+		return;
+	}
+
+	DWORD dwSize = 0;
+	GetTokenInformation(hToken, TokenPrivileges, NULL, 0, &dwSize);
+	PTOKEN_PRIVILEGES pTokenPrivileges = (PTOKEN_PRIVILEGES)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize);
+	if (!GetTokenInformation(hToken, TokenPrivileges, pTokenPrivileges, dwSize, &dwSize)) {
+		wprintf(L"[-] Failed to get token information\n");
+		CloseHandle(hToken);
+		return;
+	}
+	wprintf(L"[+] Current process privileges:\n");
+	for (DWORD i = 0; i < pTokenPrivileges->PrivilegeCount; i++) {
+		CHAR privilegeName[256] = { 0 };
+		DWORD dwprivilegeSize = sizeof(privilegeName);
+		LookupPrivilegeNameA(NULL, &pTokenPrivileges->Privileges[i].Luid, privilegeName, &dwprivilegeSize);
+		wprintf(L"[+] %-42s  %s\n", privilegeName, GetPrivilegeAttributes(pTokenPrivileges->Privileges[i].Attributes));
+	}
+	HeapFree(GetProcessHeap(), 0, pTokenPrivileges);
+
+}
+
+int wmain(int argc, wchar_t* argv[]) {
+
+	GetPrivileges();
+	
+	DWORD Pid = GetCurrentProcessId();
+	printf("[+] Current process PID: %lu\n", Pid);
+
+	HANDLE hDevice = CreateFile(
+		L"\\\\.\\TakenDown",
+		GENERIC_READ | GENERIC_WRITE,
+		0,
+		NULL,
+		OPEN_EXISTING,
+		0,
+		NULL
+	);
+
+	if (hDevice == INVALID_HANDLE_VALUE) {
+		wprintf(L"[-] Failed to open device\n");
+		return;
+	}
+
+	Token TokenInfo;
+	TokenInfo.ProcessId = Pid;
+
+	DWORD bytesReturned;
+	BOOL success = DeviceIoControl(
+		hDevice,
+		IOCTL_TOKEN_DOWN,
+		&TokenInfo,
+		sizeof(Token),
+		NULL,
+		0,
+		&bytesReturned,
+		NULL
+	);
+
+	if (!success) {
+		wprintf(L"[-] DeviceIoControl failed\n");
+		CloseHandle(hDevice);
+		return;
+	}
+
+	wprintf(L"[+] Successfully elevated process: %lu\n", Pid);
+
+	GetPrivileges();
+
+	return 0;
+}
