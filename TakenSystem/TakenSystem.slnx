@@ -6,4 +6,7 @@
   <Project Path="TakenSystem/TakenSystem.vcxproj">
     <Deploy />
   </Project>
+  <Project Path="TakenSystemClient/TakenSystemClient.vcxproj">
+    <Platform Project="x64" />
+  </Project>
 </Solution>
