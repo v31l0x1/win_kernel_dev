@@ -119,7 +119,7 @@ int main(int argc, char* argv[])
 	};
 
 	HANDLE hDevice = CreateFileW(
-		L"\\\\.\\InAtAdhar",
+		L"\\\\.\\ProcTemrinate_4",
 		GENERIC_READ | GENERIC_WRITE,
 		0,
 		NULL,
