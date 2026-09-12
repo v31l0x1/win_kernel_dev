@@ -48,7 +48,7 @@ VOID GetPrivileges() {
 		CHAR privilegeName[256] = { 0 };
 		DWORD dwprivilegeSize = sizeof(privilegeName);
 		LookupPrivilegeNameA(NULL, &pTokenPrivileges->Privileges[i].Luid, privilegeName, &dwprivilegeSize);
-		wprintf(L"[+] %-42s  %s\n", privilegeName, GetPrivilegeAttributes(pTokenPrivileges->Privileges[i].Attributes));
+		printf("  %-42s  %s\n", privilegeName, GetPrivilegeAttributes(pTokenPrivileges->Privileges[i].Attributes));
 	}
 	HeapFree(GetProcessHeap(), 0, pTokenPrivileges);
 
