@@ -1,7 +1,15 @@
-#include <ntddk.h>
+#include <ntifs.h>
 #include <ntstatus.h>
+#include <minwindef.h>
 
 #define DRIVER_NAME "PPLAlter"
+#define IOCTL_SET_PPL CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+ULONG ProtectionOffset = 0;
+typedef struct _PPL_INFO {
+	ULONG ProcessId;
+	ULONG ProtectionLevel;
+} PPL_INFO, * PPPL_INFO;
 
 NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp);
 NTSTATUS DriverDeviceIoControl(PDEVICE_OBJECT, PIRP Irp);
@@ -67,4 +75,47 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 		IoDeleteDevice(DeviceObject);
 	}
 	DbgPrint("[%s]: Driver unloaded successfully\n", DRIVER_NAME);
+}
+
+
+NTSTATUS DriverDeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
+{
+	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
+	NTSTATUS status = STATUS_SUCCESS;
+
+	if (irpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_SET_PPL) {
+
+		if (irpSp->Parameters.DeviceIoControl.InputBufferLength < sizeof(PPL_INFO)) {
+			status = STATUS_BUFFER_TOO_SMALL;
+		}
+		else {
+			PPPL_INFO PPLInfo = (PPPL_INFO)Irp->AssociatedIrp.SystemBuffer;
+			ULONG Pid = PPLInfo->ProcessId;
+			BYTE ProtectionLevel = (BYTE)PPLInfo->ProtectionLevel;
+
+			PEPROCESS Process;
+			status = PsLookupProcessByProcessId((HANDLE)(ULONG_PTR)Pid, &Process);
+			if (NT_SUCCESS(status)) {
+				DbgPrint("[%s]: Found EPROCESS for PID %lu at %p\n", DRIVER_NAME, Pid, Process);
+
+				ULONG_PTR Protection = (ULONG_PTR)Process + ProtectionOffset;
+				*(BYTE*)Protection = ProtectionLevel;
+
+				DbgPrint("[%s]: Set protection level to %u for PID %lu\n", DRIVER_NAME, ProtectionLevel, Pid);	
+				ObDereferenceObject(Process);
+				status = STATUS_SUCCESS;
+			}
+			else {
+				status = STATUS_NOT_FOUND;
+			}
+		}
+	}
+	else {
+		status = STATUS_INVALID_DEVICE_REQUEST;
+	}
+
+	Irp->IoStatus.Status = status;
+	Irp->IoStatus.Information = 0;
+	IoCompleteRequest(Irp, IO_NO_INCREMENT);
+	return status;
 }
