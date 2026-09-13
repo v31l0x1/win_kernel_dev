@@ -1,20 +1,63 @@
-// PPLAlterClient.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+#include <windows.h>
+#include <stdio.h>
 
-#include <iostream>
+#define IOCTL_SET_PPL CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-int main()
-{
-    std::cout << "Hello World!\n";
+typedef struct _PPL_INFO {
+	DWORD ProcessId;
+	BYTE ProtectionLevel;
+} PPL_INFO, * PPPL_INFO;	
+
+int main(int argc, char* argv[]) {
+
+	if (argc < 2) {
+		printf("Usage: %s <pid> <protection_level>\n", argv[0]);
+		return 1;
+	}
+
+	DWORD pid = atoi(argv[1]);
+	BYTE protection = (BYTE)atoi(argv[2]);
+
+	
+	HANDLE hFile = CreateFileW(
+		L"\\\\.\\PPLAlter",
+		GENERIC_READ | GENERIC_WRITE,
+		0,
+		NULL,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL
+	);
+
+	if (hFile == INVALID_HANDLE_VALUE) {
+		printf("Failed to open device: %d\n", GetLastError());
+		return 1;
+	}
+
+	PPL_INFO pplInfo;
+	pplInfo.ProcessId = pid;
+	pplInfo.ProtectionLevel = protection;
+
+	DWORD bytesReturned;
+	BOOL Success = DeviceIoControl(
+		hFile,
+		IOCTL_SET_PPL,
+		&pplInfo,
+		sizeof(PPL_INFO),
+		NULL,
+		0,
+		&bytesReturned,
+		NULL
+	);
+
+	if (!Success) {
+		printf("DeviceIoControl failed: %d\n", GetLastError());
+		CloseHandle(hFile);
+		return 1;
+	}
+
+	printf("Successfully set protection level %d for process %d\n", protection, pid);
+
+	CloseHandle(hFile);
+	return 0;
 }
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
