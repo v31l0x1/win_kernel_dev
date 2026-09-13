@@ -14,6 +14,7 @@ typedef struct _PPL_INFO {
 NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp);
 NTSTATUS DriverDeviceIoControl(PDEVICE_OBJECT, PIRP Irp);
 VOID DriverUnload(PDRIVER_OBJECT DriverObject);
+NTSTATUS GetProtectionOffset();
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 {
@@ -51,6 +52,13 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 		DbgPrint("[%s]: Failed to create symbolic link (0x%X)\n", DRIVER_NAME, status);
 		IoDeleteDevice(DeviceObject);
 		return status;
+	}
+
+	if (GetProtectionOffset() != STATUS_SUCCESS) {
+		DbgPrint("[%s]: Unsupported Windows build\n", DRIVER_NAME);
+		IoDeleteSymbolicLink(&SymbolicLinkName);
+		IoDeleteDevice(DeviceObject);
+		return STATUS_UNSUCCESSFUL;
 	}
 
 	DbgPrint("[%s]: Driver loaded successfully\n", DRIVER_NAME);
@@ -118,4 +126,53 @@ NTSTATUS DriverDeviceIoControl(PDEVICE_OBJECT, PIRP Irp)
 	Irp->IoStatus.Information = 0;
 	IoCompleteRequest(Irp, IO_NO_INCREMENT);
 	return status;
+}
+
+NTSTATUS GetProtectionOffset() {
+	RTL_OSVERSIONINFOW pversion;
+
+	RtlGetVersion(&pversion);
+
+	if (pversion.dwBuildNumber == 9600) {
+		ProtectionOffset = 0x67a;
+	}
+	else if (pversion.dwBuildNumber == 10240) {
+		ProtectionOffset = 0x6aa;
+	}
+	else if (pversion.dwBuildNumber == 10586) {
+		ProtectionOffset = 0x6b2;
+	}
+	else if (pversion.dwBuildNumber == 14393) {
+		ProtectionOffset = 0x6c2;
+	}
+	else if (pversion.dwBuildNumber == 15063) {
+		ProtectionOffset = 0x6ca;
+	}
+	else if (pversion.dwBuildNumber == 16299) {
+		ProtectionOffset = 0x6ca;
+	}
+	else if (pversion.dwBuildNumber == 17134) {
+		ProtectionOffset = 0x6ca;
+	}
+	else if (pversion.dwBuildNumber == 17763) {
+		ProtectionOffset = 0x6ca;
+	}
+	else if (pversion.dwBuildNumber == 18362) {
+		ProtectionOffset = 0x6fa;
+	}
+	else if (pversion.dwBuildNumber >= 19041 && pversion.dwBuildNumber <= 22631) {
+		ProtectionOffset = 0x87a;
+	}
+	else if (pversion.dwBuildNumber >= 26100) {
+		ProtectionOffset = 0x5fa;
+	}
+	else {
+		ProtectionOffset = 0;
+	}
+
+	if (ProtectionOffset)
+		return STATUS_SUCCESS;
+
+	DbgPrint("[%s]: Unsupported Windows build %lu.", DRIVER_NAME, pversion.dwBuildNumber);
+	return STATUS_UNSUCCESSFUL;
 }

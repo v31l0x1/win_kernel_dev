@@ -6,4 +6,7 @@
   <Project Path="PPLAlter/PPLAlter.vcxproj">
     <Deploy />
   </Project>
+  <Project Path="PPLAlterClient/PPLAlterClient.vcxproj" Id="bfb8b99f-5043-4036-8834-4e27bf49abbc">
+    <Platform Project="x64" />
+  </Project>
 </Solution>
