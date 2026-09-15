@@ -6,4 +6,7 @@
   <Project Path="HideProc/HideProc.vcxproj">
     <Deploy />
   </Project>
+  <Project Path="HideProcClient/HideProcClient.vcxproj" Id="5aae79f1-fe00-4d9e-8036-cb145bcf2dc0">
+    <Platform Project="x64" />
+  </Project>
 </Solution>

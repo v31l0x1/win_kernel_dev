@@ -16,8 +16,9 @@ ULONG ActiveProcessLinksOffset;
 NTSTATUS DriverCreateClose(PDEVICE_OBJECT, PIRP Irp);
 NTSTATUS DeviceIoControl(PDEVICE_OBJECT, PIRP Irp);
 VOID DriverUnload(PDRIVER_OBJECT DriverObject);
+NTSTATUS GetOffsets();
 
-extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, UNICODE_STRING)
+extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
 {
 	UNICODE_STRING driverName = RTL_CONSTANT_STRING(L"\\Device\\HideProc");
 	UNICODE_STRING symbolicLinkName = RTL_CONSTANT_STRING(L"\\??\\HideProc");
@@ -53,6 +54,13 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, UNICODE_STRING)
 		DbgPrint("[%s]: Failed to create symbolic link", DRIVER_NAME);
 		IoDeleteDevice(DeviceObject);
 		return status;
+	}
+
+	if (!NT_SUCCESS(GetOffsets())) {
+		DbgPrint("[%s]: Failed to get offsets", DRIVER_NAME);
+		IoDeleteSymbolicLink(&symbolicLinkName);
+		IoDeleteDevice(DeviceObject);
+		return STATUS_UNSUCCESSFUL;
 	}
 
 	DbgPrint("[%s]: Driver loaded successfully", DRIVER_NAME);
